@@ -1,0 +1,68 @@
+# Environment and Secrets
+.env
+.env.*
+*.env
+!.env.example
+!*.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+backend/.venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node & Package Managers
+node_modules/
+frontend/node_modules/
+.npm/
+.cache/
+
+# Build Outputs
+dist/
+frontend/dist/
+build/
+*.egg-info/
+
+# Legacy / Deprecated Folders
+frontend_old/
+
+# Media and Temporary Storage
+*.mp4
+*.mkv
+*.webm
+*.mov
+*.avi
+*.wav
+*.mp3
+*.ogg
+*.flac
+*.ass
+*.srt
+*.log
+
+temp/
+outputs/
+downloads/
+
+# Workspace Runtime Directories (Keep directory structure via .gitkeep)
+workspace/uploads/*
+!workspace/uploads/.gitkeep
+workspace/exports/*
+!workspace/exports/.gitkeep
+workspace/fonts/*
+!workspace/fonts/.gitkeep
+workspace/sfx/*
+!workspace/sfx/.gitkeep
+
+# IDE & OS Files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

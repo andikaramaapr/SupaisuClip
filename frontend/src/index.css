@@ -1,0 +1,36 @@
+@import "tailwindcss";
+@import "@fontsource/montserrat/700.css";
+@import "@fontsource/montserrat/800.css";
+@import "@fontsource/montserrat/900.css";
+@import "@fontsource/poppins/400.css";
+@import "@fontsource/poppins/500.css";
+@import "@fontsource/poppins/600.css";
+
+@theme {
+  --color-base: #0B0B10;
+  --color-surface: #12121A;
+  --color-panel: #17171F;
+  --color-border: rgba(255,255,255,0.08);
+  --color-accent: #C6FF3D;
+  --color-accent-dim: rgba(198,255,61,0.15);
+  --color-coral: #FF5A36;
+  --color-muted: #4A4A5A;
+  --color-text: #E8E8F0;
+  --color-text-dim: #7A7A8A;
+  --font-display: 'Montserrat', sans-serif;
+  --font-body: 'Poppins', sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--color-base);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  margin: 0;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Tabular numbers for timecodes */
+.tabular { font-variant-numeric: tabular-nums; }
