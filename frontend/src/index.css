@@ -7,16 +7,15 @@
 @import "@fontsource/poppins/600.css";
 
 @theme {
-  --color-base: #0B0B10;
-  --color-surface: #12121A;
-  --color-panel: #17171F;
-  --color-border: rgba(255,255,255,0.08);
-  --color-accent: #C6FF3D;
-  --color-accent-dim: rgba(198,255,61,0.15);
-  --color-coral: #FF5A36;
-  --color-muted: #4A4A5A;
-  --color-text: #E8E8F0;
-  --color-text-dim: #7A7A8A;
+  --color-surface: #F6F4F1;
+  --color-surface-raised: #EFF2F0;
+  --color-text: #111916;
+  --color-text-muted: #5A635F;
+  --color-primary: #1D634E;
+  --color-primary-hover: #164E3D;
+  --color-on-primary: #F6F4F1;
+  --color-border: #D3D9D6;
+  --color-danger: #B54329;
   --font-display: 'Montserrat', sans-serif;
   --font-body: 'Poppins', sans-serif;
 }
@@ -24,13 +23,13 @@
 * { box-sizing: border-box; }
 
 body {
-  background: var(--color-base);
-  color: var(--color-text);
+  background-color: #F6F4F1;
+  color: #111916;
   font-family: var(--font-body);
   margin: 0;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Tabular numbers for timecodes */
+/* Tabular numbers for timecodes and metrics */
 .tabular { font-variant-numeric: tabular-nums; }

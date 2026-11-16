@@ -160,7 +160,22 @@ class RenderParams(BaseModel):
     encoder: str = "auto"
     preview_seconds: float | None = Field(None, gt=0, le=30)
     # --- subtitle animation ---
-    subtitle_animation: Literal["none", "pop_in", "fade_up", "zoom_soft"] = "pop_in"
+    subtitle_animation: Literal[
+        "none",
+        "word_bounce",
+        "karaoke_spotlight",
+        "spring_pop",
+        "blur_reveal",
+        "impact_slam",
+        "neon_glow",
+        # legacy aliases
+        "pop_in",
+        "fade_up",
+        "zoom_soft",
+    ] = "word_bounce"
+    # --- subtitle sync ---
+    subtitle_offset_sec: float = Field(0.0, ge=-30.0, le=30.0)
+    word_timings: list[dict] = Field(default_factory=list)  # [{word, start, end}] dari YouTube VTT
 
     @model_validator(mode="after")
     def _check(self):
@@ -209,12 +224,14 @@ def ass_from_params(p: RenderParams, meta: dict, time_shift: float = 0.0) -> str
         highlight_color=p.highlight_color,
         letter_style=p.letter_style,
         hook_letter_style=getattr(p, 'hook_letter_style', 'uppercase'),
-        subtitle_animation=getattr(p, 'subtitle_animation', 'pop_in'),
+        subtitle_animation=getattr(p, 'subtitle_animation', 'word_bounce'),
         clip_start=cs,
         clip_end=ce,
         srt_relative=p.srt_relative,
         clip_duration_sec=ce - cs,
         time_shift=time_shift,
+        subtitle_offset_sec=getattr(p, 'subtitle_offset_sec', 0.0),
+        word_timings=getattr(p, 'word_timings', []),
     )
 
 

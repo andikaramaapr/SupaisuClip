@@ -1,24 +1,5 @@
 import { useState, useRef, useMemo, useEffect } from 'react';
-import {
-  FileText,
-  Sparkles,
-  Upload,
-  Play,
-  Square,
-  Loader2,
-  Scissors,
-  Merge,
-  Trash2,
-  Plus,
-  Search,
-  Wand2,
-  Code,
-  LayoutList,
-  Camera,
-  CameraOff,
-  Crop,
-  RotateCcw,
-} from 'lucide-react';
+import { Icon } from '@iconify/react';
 import { useStore } from '../store';
 import { generateHooks, uploadSfx, fetchYoutubeFrame } from '../api';
 import type { HookAnimation, HookMode, HookLetterStyle, Rect, NormalizedRect } from '../types';
@@ -516,8 +497,8 @@ export default function EditLeftPanel() {
     <div
       style={{
         width: 350,
-        background: '#12121A',
-        borderRight: '1px solid rgba(255,255,255,0.08)',
+        background: '#F6F4F1',
+        borderRight: '1px solid #D3D9D6',
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
@@ -529,18 +510,18 @@ export default function EditLeftPanel() {
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(3, 1fr)',
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
-          background: '#0B0B10',
+          borderBottom: '1px solid #D3D9D6',
+          background: '#EFF2F0',
         }}
       >
         <button
           onClick={() => setActiveTab('captions')}
           style={{
             padding: '14px 8px',
-            background: activeTab === 'captions' ? '#12121A' : 'transparent',
-            color: activeTab === 'captions' ? '#C6FF3D' : '#7A7A8A',
+            background: activeTab === 'captions' ? '#F6F4F1' : 'transparent',
+            color: activeTab === 'captions' ? '#1D634E' : '#5A635F',
             border: 'none',
-            borderBottom: activeTab === 'captions' ? '2px solid #C6FF3D' : '2px solid transparent',
+            borderBottom: activeTab === 'captions' ? '2px solid #1D634E' : '2px solid transparent',
             fontFamily: "'Montserrat', sans-serif",
             fontWeight: 800,
             fontSize: 11,
@@ -552,7 +533,7 @@ export default function EditLeftPanel() {
             transition: 'all 0.15s ease',
           }}
         >
-          <FileText size={14} />
+          <Icon icon="solar:document-text-bold-duotone" width={16} height={16} />
           CAPTIONS
         </button>
 
@@ -560,10 +541,10 @@ export default function EditLeftPanel() {
           onClick={() => setActiveTab('hook_sfx')}
           style={{
             padding: '14px 8px',
-            background: activeTab === 'hook_sfx' ? '#12121A' : 'transparent',
-            color: activeTab === 'hook_sfx' ? '#C6FF3D' : '#7A7A8A',
+            background: activeTab === 'hook_sfx' ? '#F6F4F1' : 'transparent',
+            color: activeTab === 'hook_sfx' ? '#1D634E' : '#5A635F',
             border: 'none',
-            borderBottom: activeTab === 'hook_sfx' ? '2px solid #C6FF3D' : '2px solid transparent',
+            borderBottom: activeTab === 'hook_sfx' ? '2px solid #1D634E' : '2px solid transparent',
             fontFamily: "'Montserrat', sans-serif",
             fontWeight: 800,
             fontSize: 11,
@@ -575,7 +556,7 @@ export default function EditLeftPanel() {
             transition: 'all 0.15s ease',
           }}
         >
-          <Sparkles size={14} />
+          <Icon icon="solar:magic-stick-3-bold-duotone" width={16} height={16} />
           HOOK &amp; SFX
         </button>
 
@@ -583,10 +564,10 @@ export default function EditLeftPanel() {
           onClick={() => setActiveTab('webcam')}
           style={{
             padding: '14px 8px',
-            background: activeTab === 'webcam' ? '#12121A' : 'transparent',
-            color: activeTab === 'webcam' ? '#C6FF3D' : '#7A7A8A',
+            background: activeTab === 'webcam' ? '#F6F4F1' : 'transparent',
+            color: activeTab === 'webcam' ? '#1D634E' : '#5A635F',
             border: 'none',
-            borderBottom: activeTab === 'webcam' ? '2px solid #C6FF3D' : '2px solid transparent',
+            borderBottom: activeTab === 'webcam' ? '2px solid #1D634E' : '2px solid transparent',
             fontFamily: "'Montserrat', sans-serif",
             fontWeight: 800,
             fontSize: 11,
@@ -598,7 +579,7 @@ export default function EditLeftPanel() {
             transition: 'all 0.15s ease',
           }}
         >
-          <Camera size={14} />
+          <Icon icon="solar:camera-bold-duotone" width={16} height={16} />
           WEBCAM
         </button>
       </div>
@@ -609,10 +590,10 @@ export default function EditLeftPanel() {
         {activeTab === 'captions' && (
           <>
             <div>
-              <div style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 700, fontSize: 13, color: '#E8E8F0', marginBottom: 4 }}>
+              <div style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 700, fontSize: 13, color: '#111916', marginBottom: 4 }}>
                 Editor Subtitle Interaktif
               </div>
-              <div style={{ fontSize: 11, color: '#7A7A8A', lineHeight: 1.5 }}>
+              <div style={{ fontSize: 11, color: '#5A635F', lineHeight: 1.5 }}>
                 {edit.srt_relative
                   ? `Menampilkan ${cues.length} cue relatif klip (waktu mulai dari 00:00.0).`
                   : clipEnd !== null
@@ -621,10 +602,42 @@ export default function EditLeftPanel() {
               </div>
             </div>
 
+            {/* Sync Audio Bar — geser subtitle offset relatif terhadap audio */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#EFF2F0', borderRadius: 8, padding: '6px 10px', border: '1px solid #D3D9D6' }}>
+              <span style={{ fontSize: 9, color: '#5A635F', fontWeight: 800, letterSpacing: 1, whiteSpace: 'nowrap' }}>SYNC AUDIO</span>
+              {([-0.25, -0.1] as const).map((delta) => (
+                <button
+                  key={delta}
+                  onClick={() => setEdit({ subtitle_offset_sec: Math.max(-10, ((edit.subtitle_offset_sec ?? 0) + delta)) })}
+                  title={`Geser subtitle ${delta}s`}
+                  style={{ padding: '3px 7px', borderRadius: 4, border: '1px solid #D3D9D6', background: '#F6F4F1', color: '#111916', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}
+                >
+                  {delta}s
+                </button>
+              ))}
+              <button
+                onClick={() => setEdit({ subtitle_offset_sec: 0 })}
+                title="Reset offset ke 0"
+                style={{ flex: 1, padding: '3px 6px', borderRadius: 4, border: `1px solid ${(edit.subtitle_offset_sec ?? 0) !== 0 ? '#1D634E' : '#D3D9D6'}`, background: (edit.subtitle_offset_sec ?? 0) !== 0 ? 'rgba(29, 99, 78, 0.12)' : '#F6F4F1', color: (edit.subtitle_offset_sec ?? 0) !== 0 ? '#1D634E' : '#5A635F', fontSize: 10, fontWeight: 800, cursor: 'pointer', textAlign: 'center' as const }}
+              >
+                {(edit.subtitle_offset_sec ?? 0) >= 0 ? '+' : ''}{(edit.subtitle_offset_sec ?? 0).toFixed(2)}s
+              </button>
+              {([0.1, 0.25] as const).map((delta) => (
+                <button
+                  key={delta}
+                  onClick={() => setEdit({ subtitle_offset_sec: Math.min(10, ((edit.subtitle_offset_sec ?? 0) + delta)) })}
+                  title={`Geser subtitle +${delta}s`}
+                  style={{ padding: '3px 7px', borderRadius: 4, border: '1px solid #D3D9D6', background: '#F6F4F1', color: '#111916', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}
+                >
+                  +{delta}s
+                </button>
+              ))}
+            </div>
+
             {/* Toolbar Atas Editor SRT */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, background: '#0B0B10', padding: 8, borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, background: '#EFF2F0', padding: 8, borderRadius: 8, border: '1px solid #D3D9D6' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                <div style={{ display: 'flex', gap: 4, background: '#171720', padding: 2, borderRadius: 6 }}>
+                <div style={{ display: 'flex', gap: 4, background: '#F6F4F1', padding: 2, borderRadius: 6, border: '1px solid #D3D9D6' }}>
                   <button
                     onClick={() => setSrtViewMode('cards')}
                     title="Tampilan Kartu Per Cue"
@@ -632,8 +645,8 @@ export default function EditLeftPanel() {
                       padding: '4px 8px',
                       borderRadius: 4,
                       border: 'none',
-                      background: srtViewMode === 'cards' ? '#C6FF3D' : 'transparent',
-                      color: srtViewMode === 'cards' ? '#0B0B10' : '#7A7A8A',
+                      background: srtViewMode === 'cards' ? '#1D634E' : 'transparent',
+                      color: srtViewMode === 'cards' ? '#F6F4F1' : '#5A635F',
                       fontSize: 10,
                       fontWeight: 700,
                       cursor: 'pointer',
@@ -642,7 +655,7 @@ export default function EditLeftPanel() {
                       gap: 4,
                     }}
                   >
-                    <LayoutList size={12} />
+                    <Icon icon="solar:list-bold-duotone" width={13} height={13} />
                     Kartu ({cues.length})
                   </button>
                   <button
@@ -652,8 +665,8 @@ export default function EditLeftPanel() {
                       padding: '4px 8px',
                       borderRadius: 4,
                       border: 'none',
-                      background: srtViewMode === 'raw' ? '#C6FF3D' : 'transparent',
-                      color: srtViewMode === 'raw' ? '#0B0B10' : '#7A7A8A',
+                      background: srtViewMode === 'raw' ? '#1D634E' : 'transparent',
+                      color: srtViewMode === 'raw' ? '#F6F4F1' : '#5A635F',
                       fontSize: 10,
                       fontWeight: 700,
                       cursor: 'pointer',
@@ -662,7 +675,7 @@ export default function EditLeftPanel() {
                       gap: 4,
                     }}
                   >
-                    <Code size={12} />
+                    <Icon icon="solar:code-bold-duotone" width={13} height={13} />
                     Raw SRT
                   </button>
                 </div>
@@ -673,9 +686,9 @@ export default function EditLeftPanel() {
                   style={{
                     padding: '4px 8px',
                     borderRadius: 5,
-                    border: showFindReplace ? '1px solid #C6FF3D' : '1px solid rgba(255,255,255,0.1)',
-                    background: showFindReplace ? 'rgba(198,255,61,0.12)' : 'transparent',
-                    color: showFindReplace ? '#C6FF3D' : '#E8E8F0',
+                    border: showFindReplace ? '1px solid #1D634E' : '1px solid #D3D9D6',
+                    background: showFindReplace ? 'rgba(29, 99, 78, 0.12)' : '#F6F4F1',
+                    color: showFindReplace ? '#1D634E' : '#111916',
                     fontSize: 10,
                     fontWeight: 600,
                     cursor: 'pointer',
@@ -684,7 +697,7 @@ export default function EditLeftPanel() {
                     gap: 4,
                   }}
                 >
-                  <Search size={12} />
+                  <Icon icon="solar:minimalistic-magnifer-bold-duotone" width={13} height={13} />
                   Find
                 </button>
               </div>
@@ -701,16 +714,16 @@ export default function EditLeftPanel() {
                     justifyContent: 'center',
                     gap: 6,
                     padding: '6px 8px',
-                    borderRadius: 5,
-                    border: '1px solid rgba(198,255,61,0.3)',
-                    background: 'rgba(198,255,61,0.08)',
-                    color: '#C6FF3D',
+                    borderRadius: 6,
+                    border: '1px solid rgba(29, 99, 78, 0.3)',
+                    background: 'rgba(29, 99, 78, 0.08)',
+                    color: '#1D634E',
                     fontSize: 10,
                     fontWeight: 700,
                     cursor: 'pointer',
                   }}
                 >
-                  <Wand2 size={12} />
+                  <Icon icon="solar:magic-stick-3-bold-duotone" width={13} height={13} />
                   Auto-Rapikan (Max 2 Baris)
                 </button>
 
@@ -723,23 +736,23 @@ export default function EditLeftPanel() {
                     justifyContent: 'center',
                     gap: 4,
                     padding: '6px 10px',
-                    borderRadius: 5,
-                    border: '1px solid rgba(255,255,255,0.12)',
-                    background: '#171720',
-                    color: '#E8E8F0',
+                    borderRadius: 6,
+                    border: '1px solid #D3D9D6',
+                    background: '#F6F4F1',
+                    color: '#111916',
                     fontSize: 10,
                     fontWeight: 600,
                     cursor: 'pointer',
                   }}
                 >
-                  <Plus size={12} />
+                  <Icon icon="solar:add-circle-bold-duotone" width={13} height={13} />
                   Tambah
                 </button>
               </div>
 
               {/* Bar Find & Replace */}
               {showFindReplace && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 6, borderTop: '1px solid #D3D9D6' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                     <input
                       type="text"
@@ -747,12 +760,12 @@ export default function EditLeftPanel() {
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       style={{
-                        background: '#171720',
-                        border: '1px solid rgba(255,255,255,0.12)',
+                        background: '#F6F4F1',
+                        border: '1px solid #D3D9D6',
                         borderRadius: 4,
                         padding: '4px 6px',
                         fontSize: 10,
-                        color: '#E8E8F0',
+                        color: '#111916',
                         outline: 'none',
                       }}
                     />
@@ -762,12 +775,12 @@ export default function EditLeftPanel() {
                       value={replaceQuery}
                       onChange={(e) => setReplaceQuery(e.target.value)}
                       style={{
-                        background: '#171720',
-                        border: '1px solid rgba(255,255,255,0.12)',
+                        background: '#F6F4F1',
+                        border: '1px solid #D3D9D6',
                         borderRadius: 4,
                         padding: '4px 6px',
                         fontSize: 10,
-                        color: '#E8E8F0',
+                        color: '#111916',
                         outline: 'none',
                       }}
                     />
@@ -775,11 +788,11 @@ export default function EditLeftPanel() {
                   <button
                     onClick={handleFindReplaceAll}
                     style={{
-                      background: '#C6FF3D',
-                      color: '#0B0B10',
+                      background: '#1D634E',
+                      color: '#F6F4F1',
                       border: 'none',
                       borderRadius: 4,
-                      padding: '4px 8px',
+                      padding: '5px 8px',
                       fontSize: 10,
                       fontWeight: 700,
                       cursor: 'pointer',
@@ -800,8 +813,8 @@ export default function EditLeftPanel() {
                     <div
                       key={cue.id || idx}
                       style={{
-                        background: '#14141D',
-                        border: '1px solid rgba(255,255,255,0.07)',
+                        background: '#EFF2F0',
+                        border: '1px solid #D3D9D6',
                         borderRadius: 8,
                         padding: 10,
                         display: 'flex',
@@ -811,48 +824,48 @@ export default function EditLeftPanel() {
                     >
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ fontSize: 10, fontWeight: 800, color: '#C6FF3D', background: 'rgba(198,255,61,0.12)', padding: '2px 5px', borderRadius: 4 }}>
+                          <span style={{ fontSize: 10, fontWeight: 800, color: '#1D634E', background: 'rgba(29, 99, 78, 0.12)', padding: '2px 6px', borderRadius: 4 }}>
                             #{idx + 1}
                           </span>
-                          <span style={{ fontSize: 10, color: '#7A7A8A', fontFamily: "'JetBrains Mono', monospace" }}>
+                          <span style={{ fontSize: 10, color: '#5A635F', fontFamily: "'JetBrains Mono', monospace" }}>
                             {dur.toFixed(1)}s
                           </span>
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', background: '#0B0B10', borderRadius: 4, padding: '1px 4px' }}>
-                            <span style={{ fontSize: 9, color: '#7A7A8A', marginRight: 2 }}>In</span>
+                          <div style={{ display: 'flex', alignItems: 'center', background: '#F6F4F1', borderRadius: 4, padding: '1px 4px', border: '1px solid #D3D9D6' }}>
+                            <span style={{ fontSize: 9, color: '#5A635F', marginRight: 2 }}>In</span>
                             <button
                               onClick={() => handleShiftTime(idx, 'start', -0.1)}
                               title="Kurangi 0.1s"
-                              style={{ border: 'none', background: 'transparent', color: '#E8E8F0', cursor: 'pointer', fontSize: 10, padding: '0 2px' }}
+                              style={{ border: 'none', background: 'transparent', color: '#111916', cursor: 'pointer', fontSize: 10, padding: '0 2px' }}
                             >
                               -
                             </button>
-                            <span style={{ fontSize: 9, color: '#C6FF3D', fontFamily: 'monospace' }}>{cue.start.toFixed(1)}</span>
+                            <span style={{ fontSize: 9, color: '#1D634E', fontFamily: 'monospace', fontWeight: 700 }}>{cue.start.toFixed(1)}</span>
                             <button
                               onClick={() => handleShiftTime(idx, 'start', 0.1)}
                               title="Tambah 0.1s"
-                              style={{ border: 'none', background: 'transparent', color: '#E8E8F0', cursor: 'pointer', fontSize: 10, padding: '0 2px' }}
+                              style={{ border: 'none', background: 'transparent', color: '#111916', cursor: 'pointer', fontSize: 10, padding: '0 2px' }}
                             >
                               +
                             </button>
                           </div>
 
-                          <div style={{ display: 'flex', alignItems: 'center', background: '#0B0B10', borderRadius: 4, padding: '1px 4px' }}>
-                            <span style={{ fontSize: 9, color: '#7A7A8A', marginRight: 2 }}>Out</span>
+                          <div style={{ display: 'flex', alignItems: 'center', background: '#F6F4F1', borderRadius: 4, padding: '1px 4px', border: '1px solid #D3D9D6' }}>
+                            <span style={{ fontSize: 9, color: '#5A635F', marginRight: 2 }}>Out</span>
                             <button
                               onClick={() => handleShiftTime(idx, 'end', -0.1)}
                               title="Kurangi 0.1s"
-                              style={{ border: 'none', background: 'transparent', color: '#E8E8F0', cursor: 'pointer', fontSize: 10, padding: '0 2px' }}
+                              style={{ border: 'none', background: 'transparent', color: '#111916', cursor: 'pointer', fontSize: 10, padding: '0 2px' }}
                             >
                               -
                             </button>
-                            <span style={{ fontSize: 9, color: '#C6FF3D', fontFamily: 'monospace' }}>{cue.end.toFixed(1)}</span>
+                            <span style={{ fontSize: 9, color: '#1D634E', fontFamily: 'monospace', fontWeight: 700 }}>{cue.end.toFixed(1)}</span>
                             <button
                               onClick={() => handleShiftTime(idx, 'end', 0.1)}
                               title="Tambah 0.1s"
-                              style={{ border: 'none', background: 'transparent', color: '#E8E8F0', cursor: 'pointer', fontSize: 10, padding: '0 2px' }}
+                              style={{ border: 'none', background: 'transparent', color: '#111916', cursor: 'pointer', fontSize: 10, padding: '0 2px' }}
                             >
                               +
                             </button>
@@ -867,11 +880,11 @@ export default function EditLeftPanel() {
                         style={{
                           width: '100%',
                           minHeight: 44,
-                          background: '#0B0B10',
-                          border: '1px solid rgba(255,255,255,0.1)',
+                          background: '#F6F4F1',
+                          border: '1px solid #D3D9D6',
                           borderRadius: 6,
                           padding: 6,
-                          color: '#FFFFFF',
+                          color: '#111916',
                           fontSize: 12,
                           fontFamily: edit.font_family || 'Arial',
                           fontWeight: 600,
@@ -890,16 +903,16 @@ export default function EditLeftPanel() {
                               display: 'flex',
                               alignItems: 'center',
                               gap: 4,
-                              padding: '3px 7px',
+                              padding: '3px 8px',
                               borderRadius: 4,
-                              border: '1px solid rgba(255,255,255,0.08)',
-                              background: '#1A1A24',
-                              color: '#E8E8F0',
+                              border: '1px solid #D3D9D6',
+                              background: '#F6F4F1',
+                              color: '#111916',
                               fontSize: 10,
                               cursor: 'pointer',
                             }}
                           >
-                            <Scissors size={11} style={{ color: '#C6FF3D' }} />
+                            <Icon icon="solar:scissors-bold-duotone" width={12} height={12} style={{ color: '#1D634E' }} />
                             Bagi 2
                           </button>
 
@@ -911,16 +924,16 @@ export default function EditLeftPanel() {
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: 4,
-                                padding: '3px 7px',
+                                padding: '3px 8px',
                                 borderRadius: 4,
-                                border: '1px solid rgba(255,255,255,0.08)',
-                                background: '#1A1A24',
-                                color: '#E8E8F0',
+                                border: '1px solid #D3D9D6',
+                                background: '#F6F4F1',
+                                color: '#111916',
                                 fontSize: 10,
                                 cursor: 'pointer',
                               }}
                             >
-                              <Merge size={11} style={{ color: '#C6FF3D' }} />
+                              <Icon icon="solar:layers-minimalistic-bold-duotone" width={12} height={12} style={{ color: '#1D634E' }} />
                               Gabung
                             </button>
                           )}
@@ -933,16 +946,16 @@ export default function EditLeftPanel() {
                             display: 'flex',
                             alignItems: 'center',
                             gap: 4,
-                            padding: '3px 7px',
+                            padding: '3px 8px',
                             borderRadius: 4,
-                            border: '1px solid rgba(255,70,70,0.2)',
-                            background: 'rgba(255,70,70,0.08)',
-                            color: '#FF6B6B',
+                            border: '1px solid rgba(181, 67, 41, 0.2)',
+                            background: 'rgba(181, 67, 41, 0.08)',
+                            color: '#B54329',
                             fontSize: 10,
                             cursor: 'pointer',
                           }}
                         >
-                          <Trash2 size={11} />
+                          <Icon icon="solar:trash-bin-trash-bold-duotone" width={12} height={12} />
                         </button>
                       </div>
                     </div>
@@ -958,11 +971,11 @@ export default function EditLeftPanel() {
                   width: '100%',
                   flex: 1,
                   minHeight: 320,
-                  background: '#0B0B10',
-                  border: '1px solid rgba(255,255,255,0.12)',
+                  background: '#EFF2F0',
+                  border: '1px solid #D3D9D6',
                   borderRadius: 8,
                   padding: 10,
-                  color: '#E8E8F0',
+                  color: '#111916',
                   fontSize: 11,
                   fontFamily: "'JetBrains Mono', monospace",
                   lineHeight: 1.6,
@@ -978,10 +991,10 @@ export default function EditLeftPanel() {
         {activeTab === 'hook_sfx' && (
           <>
             <div>
-              <div style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 700, fontSize: 13, color: '#E8E8F0', marginBottom: 4 }}>
+              <div style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 700, fontSize: 13, color: '#111916', marginBottom: 4 }}>
                 Hook Teks &amp; Animasi
               </div>
-              <div style={{ fontSize: 11, color: '#7A7A8A', lineHeight: 1.5 }}>
+              <div style={{ fontSize: 11, color: '#5A635F', lineHeight: 1.5 }}>
                 Kalimat pancingan di detik awal klip dengan efek animasi pop-out.
               </div>
             </div>
@@ -998,19 +1011,24 @@ export default function EditLeftPanel() {
                 padding: '10px 14px',
                 borderRadius: 8,
                 border: 'none',
-                background: 'rgba(198,255,61,0.15)',
-                color: '#C6FF3D',
+                background: '#1D634E',
+                color: '#F6F4F1',
                 fontFamily: "'Montserrat', sans-serif",
                 fontWeight: 700,
                 fontSize: 11,
                 cursor: loadingHooks ? 'not-allowed' : 'pointer',
+                boxShadow: '0 2px 8px rgba(29, 99, 78, 0.25)',
               }}
             >
-              {loadingHooks ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+              {loadingHooks ? (
+                <Icon icon="solar:refresh-circle-bold-duotone" width={14} height={14} className="animate-spin" />
+              ) : (
+                <Icon icon="solar:magic-stick-3-bold-duotone" width={14} height={14} />
+              )}
               Generate Hook dengan Gemini AI
             </button>
 
-            {hookError && <div style={{ color: '#FF5A36', fontSize: 11 }}>{hookError}</div>}
+            {hookError && <div style={{ color: '#B54329', fontSize: 11 }}>{hookError}</div>}
 
             {/* Rekomendasi Hook AI */}
             {hookSuggestions.length > 0 && (
@@ -1020,16 +1038,16 @@ export default function EditLeftPanel() {
                     key={i}
                     onClick={() => setEdit({ hook_text: s.hook, hook_duration_sec: s.recommended_seconds })}
                     style={{
-                      background: '#17171F',
-                      border: edit.hook_text === s.hook ? '1px solid #C6FF3D' : '1px solid rgba(255,255,255,0.06)',
+                      background: edit.hook_text === s.hook ? 'rgba(29, 99, 78, 0.08)' : '#EFF2F0',
+                      border: edit.hook_text === s.hook ? '1.5px solid #1D634E' : '1px solid #D3D9D6',
                       borderRadius: 8,
                       padding: '10px 12px',
                       cursor: 'pointer',
-                      transition: 'all 0.15s',
+                      transition: 'all 0.15s ease',
                     }}
                   >
-                    <div style={{ fontSize: 12, fontWeight: 600, color: '#E8E8F0' }}>"{s.hook}"</div>
-                    <div style={{ fontSize: 10, color: '#7A7A8A', marginTop: 4 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#111916' }}>"{s.hook}"</div>
+                    <div style={{ fontSize: 10, color: '#5A635F', marginTop: 4 }}>
                       ⏱ {s.recommended_seconds}s · {s.reason}
                     </div>
                   </div>
@@ -1039,7 +1057,7 @@ export default function EditLeftPanel() {
 
             {/* Input Manual Teks Hook */}
             <div>
-              <label style={{ display: 'block', fontSize: 11, color: '#7A7A8A', marginBottom: 4, fontWeight: 600 }}>
+              <label style={{ display: 'block', fontSize: 11, color: '#5A635F', marginBottom: 4, fontWeight: 700 }}>
                 TEKS HOOK
               </label>
               <textarea
@@ -1049,11 +1067,11 @@ export default function EditLeftPanel() {
                 style={{
                   width: '100%',
                   height: 56,
-                  background: '#0B0B10',
-                  border: '1px solid rgba(255,255,255,0.12)',
+                  background: '#EFF2F0',
+                  border: '1px solid #D3D9D6',
                   borderRadius: 6,
                   padding: 8,
-                  color: '#E8E8F0',
+                  color: '#111916',
                   fontSize: 12,
                   outline: 'none',
                   resize: 'none',
@@ -1063,7 +1081,7 @@ export default function EditLeftPanel() {
 
             {/* Durasi Hook */}
             <div>
-              <label style={{ display: 'block', fontSize: 11, color: '#7A7A8A', marginBottom: 4, fontWeight: 600 }}>
+              <label style={{ display: 'block', fontSize: 11, color: '#5A635F', marginBottom: 4, fontWeight: 700 }}>
                 DURASI TAMPIL HOOK
               </label>
               <select
@@ -1071,10 +1089,10 @@ export default function EditLeftPanel() {
                 onChange={(e) => setEdit({ hook_duration_sec: parseFloat(e.target.value) })}
                 style={{
                   width: '100%',
-                  background: '#0B0B10',
-                  border: '1px solid rgba(255,255,255,0.12)',
+                  background: '#EFF2F0',
+                  border: '1px solid #D3D9D6',
                   borderRadius: 6,
-                  color: '#E8E8F0',
+                  color: '#111916',
                   padding: '8px 10px',
                   fontSize: 12,
                   outline: 'none',
@@ -1091,7 +1109,7 @@ export default function EditLeftPanel() {
 
             {/* Animasi Masuk Hook */}
             <div>
-              <label style={{ display: 'block', fontSize: 11, color: '#7A7A8A', marginBottom: 6, fontWeight: 600 }}>
+              <label style={{ display: 'block', fontSize: 11, color: '#5A635F', marginBottom: 6, fontWeight: 700 }}>
                 ANIMASI MASUK HOOK
               </label>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
@@ -1105,16 +1123,16 @@ export default function EditLeftPanel() {
                       style={{
                         padding: '8px 10px',
                         borderRadius: 6,
-                        border: isActive ? '1px solid #C6FF3D' : '1px solid rgba(255,255,255,0.08)',
-                        background: isActive ? 'rgba(198,255,61,0.12)' : '#171720',
-                        color: isActive ? '#C6FF3D' : '#E8E8F0',
+                        border: isActive ? '1.5px solid #1D634E' : '1px solid #D3D9D6',
+                        background: isActive ? 'rgba(29, 99, 78, 0.1)' : '#EFF2F0',
+                        color: isActive ? '#1D634E' : '#111916',
                         textAlign: 'left',
                         cursor: 'pointer',
-                        transition: 'all 0.15s',
+                        transition: 'all 0.15s ease',
                       }}
                     >
                       <div style={{ fontSize: 11, fontWeight: 700 }}>{anim.label}</div>
-                      <div style={{ fontSize: 9, color: isActive ? '#C6FF3D' : '#7A7A8A', marginTop: 2 }}>{anim.desc}</div>
+                      <div style={{ fontSize: 9, color: isActive ? '#1D634E' : '#5A635F', marginTop: 2 }}>{anim.desc}</div>
                     </button>
                   );
                 })}
@@ -1124,7 +1142,7 @@ export default function EditLeftPanel() {
             {/* Gaya Latar Hook & Letter Style */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               <div>
-                <label style={{ display: 'block', fontSize: 11, color: '#7A7A8A', marginBottom: 6, fontWeight: 600 }}>
+                <label style={{ display: 'block', fontSize: 11, color: '#5A635F', marginBottom: 6, fontWeight: 700 }}>
                   GAYA LATAR
                 </label>
                 <div style={{ display: 'flex', gap: 4 }}>
@@ -1142,9 +1160,9 @@ export default function EditLeftPanel() {
                           flex: 1,
                           padding: '6px 2px',
                           borderRadius: 6,
-                          border: isActive ? '1px solid #C6FF3D' : '1px solid rgba(255,255,255,0.1)',
-                          background: isActive ? 'rgba(198,255,61,0.12)' : 'transparent',
-                          color: isActive ? '#C6FF3D' : '#7A7A8A',
+                          border: isActive ? '1px solid #1D634E' : '1px solid #D3D9D6',
+                          background: isActive ? '#1D634E' : '#EFF2F0',
+                          color: isActive ? '#F6F4F1' : '#5A635F',
                           fontSize: 10,
                           fontWeight: 700,
                           cursor: 'pointer',
@@ -1158,7 +1176,7 @@ export default function EditLeftPanel() {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: 11, color: '#7A7A8A', marginBottom: 6, fontWeight: 600 }}>
+                <label style={{ display: 'block', fontSize: 11, color: '#5A635F', marginBottom: 6, fontWeight: 700 }}>
                   LETTER CASE
                 </label>
                 <div style={{ display: 'flex', gap: 4 }}>
@@ -1176,9 +1194,9 @@ export default function EditLeftPanel() {
                           flex: 1,
                           padding: '6px 2px',
                           borderRadius: 6,
-                          border: isSelected ? '1px solid #C6FF3D' : '1px solid rgba(255,255,255,0.08)',
-                          background: isSelected ? 'rgba(198,255,61,0.12)' : '#171720',
-                          color: isSelected ? '#C6FF3D' : '#A0A0B0',
+                          border: isSelected ? '1px solid #1D634E' : '1px solid #D3D9D6',
+                          background: isSelected ? '#1D634E' : '#EFF2F0',
+                          color: isSelected ? '#F6F4F1' : '#5A635F',
                           fontSize: 10,
                           fontWeight: 700,
                           cursor: 'pointer',
@@ -1195,7 +1213,7 @@ export default function EditLeftPanel() {
             {/* Font Hook, Warna Teks & Warna Box */}
             <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 8 }}>
               <div>
-                <label style={{ display: 'block', fontSize: 10, color: '#7A7A8A', marginBottom: 4, fontWeight: 600 }}>
+                <label style={{ display: 'block', fontSize: 10, color: '#5A635F', marginBottom: 4, fontWeight: 700 }}>
                   FONT HOOK
                 </label>
                 <select
@@ -1203,10 +1221,10 @@ export default function EditLeftPanel() {
                   onChange={(e) => setEdit({ hook_font_family: e.target.value })}
                   style={{
                     width: '100%',
-                    background: '#0B0B10',
-                    border: '1px solid rgba(255,255,255,0.12)',
+                    background: '#EFF2F0',
+                    border: '1px solid #D3D9D6',
                     borderRadius: 6,
-                    color: '#E8E8F0',
+                    color: '#111916',
                     padding: '6px 8px',
                     fontSize: 11,
                     outline: 'none',
@@ -1233,43 +1251,43 @@ export default function EditLeftPanel() {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: 10, color: '#7A7A8A', marginBottom: 4, fontWeight: 600 }}>
+                <label style={{ display: 'block', fontSize: 10, color: '#5A635F', marginBottom: 4, fontWeight: 700 }}>
                   WARNA TEKS
                 </label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#0B0B10', padding: '4px 6px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.12)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#EFF2F0', padding: '4px 6px', borderRadius: 6, border: '1px solid #D3D9D6' }}>
                   <input
                     type="color"
-                    value={edit.hook_color || '#FFFFFF'}
+                    value={edit.hook_color || '#F6F4F1'}
                     onChange={(e) => setEdit({ hook_color: e.target.value })}
                     style={{ width: 20, height: 20, border: 'none', background: 'transparent', cursor: 'pointer' }}
                   />
-                  <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#E8E8F0' }}>{edit.hook_color || '#FFFFFF'}</span>
+                  <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#111916' }}>{edit.hook_color || '#F6F4F1'}</span>
                 </div>
               </div>
             </div>
 
             {(edit.hook_mode ?? 'box') === 'box' && (
               <div>
-                <label style={{ display: 'block', fontSize: 10, color: '#7A7A8A', marginBottom: 4, fontWeight: 600 }}>
+                <label style={{ display: 'block', fontSize: 10, color: '#5A635F', marginBottom: 4, fontWeight: 700 }}>
                   WARNA BOX LATAR
                 </label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#0B0B10', padding: '4px 8px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.12)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#EFF2F0', padding: '4px 8px', borderRadius: 6, border: '1px solid #D3D9D6' }}>
                   <input
                     type="color"
-                    value={edit.hook_box_color || '#121212'}
+                    value={edit.hook_box_color || '#111916'}
                     onChange={(e) => setEdit({ hook_box_color: e.target.value })}
                     style={{ width: 22, height: 22, border: 'none', background: 'transparent', cursor: 'pointer' }}
                   />
-                  <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#E8E8F0' }}>{edit.hook_box_color || '#121212'}</span>
+                  <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#111916' }}>{edit.hook_box_color || '#111916'}</span>
                 </div>
               </div>
             )}
 
             {/* Slider Ukuran & Posisi Vertikal Hook */}
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#7A7A8A', marginBottom: 4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#5A635F', marginBottom: 4 }}>
                 <span>UKURAN FONT HOOK</span>
-                <span style={{ color: '#C6FF3D' }}>{edit.hook_font_size}px</span>
+                <span style={{ color: '#1D634E', fontWeight: 700 }}>{edit.hook_font_size}px</span>
               </div>
               <input
                 type="range"
@@ -1283,9 +1301,9 @@ export default function EditLeftPanel() {
             </div>
 
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#7A7A8A', marginBottom: 4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#5A635F', marginBottom: 4 }}>
                 <span>POSISI VERTIKAL HOOK</span>
-                <span style={{ color: '#C6FF3D' }}>{edit.hook_y_margin}px</span>
+                <span style={{ color: '#1D634E', fontWeight: 700 }}>{edit.hook_y_margin}px</span>
               </div>
               <input
                 type="range"
@@ -1299,19 +1317,19 @@ export default function EditLeftPanel() {
             </div>
 
             {/* Pemisah ke SFX */}
-            <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
+            <div style={{ height: 1, background: '#D3D9D6', margin: '4px 0' }} />
 
             <div>
-              <div style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 700, fontSize: 13, color: '#E8E8F0', marginBottom: 4 }}>
+              <div style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 700, fontSize: 13, color: '#111916', marginBottom: 4 }}>
                 Sound Effect (SFX)
               </div>
-              <div style={{ fontSize: 11, color: '#7A7A8A', lineHeight: 1.5 }}>
+              <div style={{ fontSize: 11, color: '#5A635F', lineHeight: 1.5 }}>
                 Audio punchy untuk memperkuat hook di detik awal.
               </div>
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: 11, color: '#7A7A8A', marginBottom: 4, fontWeight: 600 }}>
+              <label style={{ display: 'block', fontSize: 11, color: '#5A635F', marginBottom: 4, fontWeight: 700 }}>
                 PILIH SFX
               </label>
               <div style={{ display: 'flex', gap: 8 }}>
@@ -1320,10 +1338,10 @@ export default function EditLeftPanel() {
                   onChange={(e) => setEdit({ sfx_filename: e.target.value })}
                   style={{
                     flex: 1,
-                    background: '#0B0B10',
-                    border: '1px solid rgba(255,255,255,0.12)',
+                    background: '#EFF2F0',
+                    border: '1px solid #D3D9D6',
                     borderRadius: 6,
-                    color: '#E8E8F0',
+                    color: '#111916',
                     padding: '8px 10px',
                     fontSize: 12,
                     outline: 'none',
@@ -1346,24 +1364,24 @@ export default function EditLeftPanel() {
                     width: 36,
                     height: 36,
                     borderRadius: 6,
-                    border: '1px solid rgba(255,255,255,0.12)',
-                    background: '#17171F',
-                    color: edit.sfx_filename ? '#C6FF3D' : '#4A4A5A',
+                    border: '1px solid #D3D9D6',
+                    background: '#EFF2F0',
+                    color: edit.sfx_filename ? '#1D634E' : '#5A635F',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: edit.sfx_filename ? 'pointer' : 'not-allowed',
                   }}
                 >
-                  {playingSfx ? <Square size={14} /> : <Play size={14} />}
+                  <Icon icon={playingSfx ? 'solar:stop-bold-duotone' : 'solar:play-bold-duotone'} width={16} height={16} />
                 </button>
               </div>
             </div>
 
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#7A7A8A', marginBottom: 4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#5A635F', marginBottom: 4 }}>
                 <span>VOLUME SFX</span>
-                <span style={{ color: '#C6FF3D' }}>{Math.round(edit.sfx_volume * 100)}%</span>
+                <span style={{ color: '#1D634E', fontWeight: 700 }}>{Math.round(edit.sfx_volume * 100)}%</span>
               </div>
               <input
                 type="range"
@@ -1377,9 +1395,9 @@ export default function EditLeftPanel() {
             </div>
 
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#7A7A8A', marginBottom: 4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#5A635F', marginBottom: 4 }}>
                 <span>MULAI PADA DETIK KE-</span>
-                <span style={{ color: '#C6FF3D' }}>{edit.sfx_start_sec.toFixed(1)}s</span>
+                <span style={{ color: '#1D634E', fontWeight: 700 }}>{edit.sfx_start_sec.toFixed(1)}s</span>
               </div>
               <input
                 type="range"
@@ -1414,16 +1432,20 @@ export default function EditLeftPanel() {
                   gap: 8,
                   padding: '9px 12px',
                   borderRadius: 6,
-                  border: '1px dashed rgba(255,255,255,0.2)',
-                  background: 'transparent',
-                  color: '#E8E8F0',
+                  border: '1px dashed #D3D9D6',
+                  background: '#EFF2F0',
+                  color: '#111916',
                   fontSize: 11,
                   fontFamily: "'Montserrat', sans-serif",
                   fontWeight: 600,
                   cursor: 'pointer',
                 }}
               >
-                {uploadingSfx ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+                {uploadingSfx ? (
+                  <Icon icon="solar:refresh-circle-bold-duotone" width={14} height={14} className="animate-spin" />
+                ) : (
+                  <Icon icon="solar:upload-track-bold-duotone" width={14} height={14} />
+                )}
                 Upload Custom SFX (.wav / .mp3)
               </button>
             </div>
@@ -1434,10 +1456,10 @@ export default function EditLeftPanel() {
         {activeTab === 'webcam' && (
           <>
             <div>
-              <div style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 700, fontSize: 13, color: '#E8E8F0', marginBottom: 4 }}>
+              <div style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 700, fontSize: 13, color: '#111916', marginBottom: 4 }}>
                 Webcam Popout &amp; Framing
               </div>
-              <div style={{ fontSize: 11, color: '#7A7A8A', lineHeight: 1.5 }}>
+              <div style={{ fontSize: 11, color: '#5A635F', lineHeight: 1.5 }}>
                 Sorot wajah streamer dari video asli untuk ditampilkan melayang di video 9:16.
               </div>
             </div>
@@ -1459,40 +1481,40 @@ export default function EditLeftPanel() {
                 gap: 8,
                 padding: '12px 16px',
                 borderRadius: 8,
-                border: edit.webcam_enabled ? '1px solid #C6FF3D' : '1px solid rgba(255,255,255,0.12)',
-                background: edit.webcam_enabled ? 'rgba(198,255,61,0.15)' : '#171720',
-                color: edit.webcam_enabled ? '#C6FF3D' : '#E8E8F0',
+                border: edit.webcam_enabled ? '1.5px solid #1D634E' : '1px solid #D3D9D6',
+                background: edit.webcam_enabled ? '#1D634E' : '#EFF2F0',
+                color: edit.webcam_enabled ? '#F6F4F1' : '#111916',
                 fontFamily: "'Montserrat', sans-serif",
                 fontWeight: 800,
                 fontSize: 12,
                 cursor: 'pointer',
-                transition: 'all 0.15s',
+                transition: 'all 0.15s ease',
               }}
             >
-              {edit.webcam_enabled ? <Camera size={16} /> : <CameraOff size={16} />}
+              <Icon icon={edit.webcam_enabled ? 'solar:camera-bold-duotone' : 'solar:camera-minimalistic-bold-duotone'} width={18} height={18} />
               {edit.webcam_enabled ? 'WEBCAM POPOUT AKTIF' : 'AKTIFKAN WEBCAM POPOUT'}
             </button>
 
             {edit.webcam_enabled && (
               <>
                 {/* Source Frame Selector */}
-                <div style={{ background: '#0B0B10', padding: 12, borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#E8E8F0', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Crop size={13} style={{ color: '#C6FF3D' }} />
+                <div style={{ background: '#EFF2F0', padding: 12, borderRadius: 8, border: '1px solid #D3D9D6', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#111916', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Icon icon="solar:crop-bold-duotone" width={14} height={14} style={{ color: '#1D634E' }} />
                     <span>Sorot Kamera di Video Asli:</span>
                   </div>
 
-                  {/* Box Video Asli dengan Kotak Seleksi webcam_src */}
+                  {/* Box Video Asli dengan Kotak Seleksi webcam_src - KEPT DARK */}
                   <div
                     ref={sourceFrameRef}
                     style={{
                       position: 'relative',
                       width: '100%',
                       aspectRatio: '16/9',
-                      background: '#000',
+                      background: '#000000',
                       borderRadius: 6,
                       overflow: 'hidden',
-                      border: '1px solid rgba(255,255,255,0.15)',
+                      border: '1px solid #D3D9D6',
                       userSelect: 'none',
                     }}
                   >
@@ -1519,14 +1541,14 @@ export default function EditLeftPanel() {
                         top: `${currentSrc.y * 100}%`,
                         width: `${currentSrc.w * 100}%`,
                         height: `${currentSrc.h * 100}%`,
-                        border: '2px solid #C6FF3D',
-                        background: 'rgba(198,255,61,0.25)',
+                        border: '2px solid #1D634E',
+                        background: 'rgba(29, 99, 78, 0.35)',
                         cursor: draggingSrc ? 'grabbing' : 'grab',
-                        boxShadow: '0 0 10px rgba(198,255,61,0.4)',
+                        boxShadow: '0 0 10px rgba(29, 99, 78, 0.5)',
                         zIndex: 10,
                       }}
                     >
-                      <div style={{ position: 'absolute', top: 2, left: 4, fontSize: 8, fontWeight: 900, color: '#0B0B10', background: '#C6FF3D', padding: '1px 3px', borderRadius: 2 }}>
+                      <div style={{ position: 'absolute', top: 2, left: 4, fontSize: 8, fontWeight: 900, color: '#F6F4F1', background: '#1D634E', padding: '1px 4px', borderRadius: 2 }}>
                         CAM
                       </div>
 
@@ -1538,8 +1560,8 @@ export default function EditLeftPanel() {
                             position: 'absolute',
                             width: 8,
                             height: 8,
-                            background: '#C6FF3D',
-                            border: '1px solid #0B0B10',
+                            background: '#1D634E',
+                            border: '1px solid #F6F4F1',
                             borderRadius: 1,
                             cursor: `${h}-resize`,
                             top: h.includes('n') ? -4 : 'auto',
@@ -1552,33 +1574,33 @@ export default function EditLeftPanel() {
                     </div>
                   </div>
 
-                  <div style={{ fontSize: 10, color: '#7A7A8A' }}>
-                    Geser atau tarik sudut kotak kuning untuk memilih area kamera streamer.
+                  <div style={{ fontSize: 10, color: '#5A635F' }}>
+                    Geser atau tarik sudut kotak untuk memilih area kamera streamer.
                   </div>
 
                   {/* 4 Preset Pojok Cepat */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                     <button
                       onClick={() => applyWebcamSrcPreset('bottom_left')}
-                      style={{ padding: '6px 8px', borderRadius: 5, border: '1px solid rgba(255,255,255,0.1)', background: '#171720', color: '#E8E8F0', fontSize: 10, cursor: 'pointer' }}
+                      style={{ padding: '6px 8px', borderRadius: 5, border: '1px solid #D3D9D6', background: '#F6F4F1', color: '#111916', fontSize: 10, cursor: 'pointer' }}
                     >
                       Pojok Kiri Bawah
                     </button>
                     <button
                       onClick={() => applyWebcamSrcPreset('bottom_right')}
-                      style={{ padding: '6px 8px', borderRadius: 5, border: '1px solid rgba(255,255,255,0.1)', background: '#171720', color: '#E8E8F0', fontSize: 10, cursor: 'pointer' }}
+                      style={{ padding: '6px 8px', borderRadius: 5, border: '1px solid #D3D9D6', background: '#F6F4F1', color: '#111916', fontSize: 10, cursor: 'pointer' }}
                     >
                       Pojok Kanan Bawah
                     </button>
                     <button
                       onClick={() => applyWebcamSrcPreset('top_left')}
-                      style={{ padding: '6px 8px', borderRadius: 5, border: '1px solid rgba(255,255,255,0.1)', background: '#171720', color: '#E8E8F0', fontSize: 10, cursor: 'pointer' }}
+                      style={{ padding: '6px 8px', borderRadius: 5, border: '1px solid #D3D9D6', background: '#F6F4F1', color: '#111916', fontSize: 10, cursor: 'pointer' }}
                     >
                       Pojok Kiri Atas
                     </button>
                     <button
                       onClick={() => applyWebcamSrcPreset('top_right')}
-                      style={{ padding: '6px 8px', borderRadius: 5, border: '1px solid rgba(255,255,255,0.1)', background: '#171720', color: '#E8E8F0', fontSize: 10, cursor: 'pointer' }}
+                      style={{ padding: '6px 8px', borderRadius: 5, border: '1px solid #D3D9D6', background: '#F6F4F1', color: '#111916', fontSize: 10, cursor: 'pointer' }}
                     >
                       Pojok Kanan Atas
                     </button>
@@ -1586,16 +1608,16 @@ export default function EditLeftPanel() {
                 </div>
 
                 {/* Gaya Border & Corner Popout */}
-                <div style={{ background: '#0B0B10', padding: 12, borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#E8E8F0' }}>
+                <div style={{ background: '#EFF2F0', padding: 12, borderRadius: 8, border: '1px solid #D3D9D6', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#111916' }}>
                     Gaya Border &amp; Sudut Webcam
                   </span>
 
                   {/* Ketebalan Border */}
                   <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#7A7A8A', marginBottom: 4 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#5A635F', marginBottom: 4 }}>
                       <span>KETEBALAN BORDER</span>
-                      <span style={{ color: '#C6FF3D' }}>{edit.webcam_style?.border_px ?? 4}px</span>
+                      <span style={{ color: '#1D634E', fontWeight: 700 }}>{edit.webcam_style?.border_px ?? 4}px</span>
                     </div>
                     <input
                       type="range"
@@ -1606,7 +1628,7 @@ export default function EditLeftPanel() {
                         setEdit({
                           webcam_style: {
                             border_px: parseInt(e.target.value, 10),
-                            border_color: edit.webcam_style?.border_color ?? '#FFFFFF',
+                            border_color: edit.webcam_style?.border_color ?? '#F6F4F1',
                             radius_px: edit.webcam_style?.radius_px ?? 16,
                           },
                         })
@@ -1617,11 +1639,11 @@ export default function EditLeftPanel() {
 
                   {/* Warna Border */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 10, color: '#7A7A8A' }}>WARNA BORDER</span>
+                    <span style={{ fontSize: 10, color: '#5A635F' }}>WARNA BORDER</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <input
                         type="color"
-                        value={edit.webcam_style?.border_color ?? '#FFFFFF'}
+                        value={edit.webcam_style?.border_color ?? '#F6F4F1'}
                         onChange={(e) =>
                           setEdit({
                             webcam_style: {
@@ -1633,17 +1655,17 @@ export default function EditLeftPanel() {
                         }
                         style={{ width: 22, height: 22, border: 'none', background: 'transparent', cursor: 'pointer' }}
                       />
-                      <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#E8E8F0' }}>
-                        {edit.webcam_style?.border_color ?? '#FFFFFF'}
+                      <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#111916' }}>
+                        {edit.webcam_style?.border_color ?? '#F6F4F1'}
                       </span>
                     </div>
                   </div>
 
                   {/* Radius Corner */}
                   <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#7A7A8A', marginBottom: 4 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#5A635F', marginBottom: 4 }}>
                       <span>ROUNDED CORNER (SUDUT)</span>
-                      <span style={{ color: '#C6FF3D' }}>{edit.webcam_style?.radius_px ?? 16}px</span>
+                      <span style={{ color: '#1D634E', fontWeight: 700 }}>{edit.webcam_style?.radius_px ?? 16}px</span>
                     </div>
                     <input
                       type="range"
@@ -1654,7 +1676,7 @@ export default function EditLeftPanel() {
                         setEdit({
                           webcam_style: {
                             border_px: edit.webcam_style?.border_px ?? 4,
-                            border_color: edit.webcam_style?.border_color ?? '#FFFFFF',
+                            border_color: edit.webcam_style?.border_color ?? '#F6F4F1',
                             radius_px: parseInt(e.target.value, 10),
                           },
                         })
@@ -1678,15 +1700,15 @@ export default function EditLeftPanel() {
                       gap: 6,
                       padding: '6px 10px',
                       borderRadius: 6,
-                      border: '1px solid rgba(255,255,255,0.08)',
-                      background: 'transparent',
-                      color: '#7A7A8A',
+                      border: '1px solid #D3D9D6',
+                      background: '#F6F4F1',
+                      color: '#5A635F',
                       fontSize: 10,
                       cursor: 'pointer',
                       marginTop: 4,
                     }}
                   >
-                    <RotateCcw size={11} />
+                    <Icon icon="solar:restart-bold-duotone" width={13} height={13} />
                     Reset Posisi &amp; Ukuran Webcam
                   </button>
                 </div>

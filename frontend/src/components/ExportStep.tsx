@@ -1,14 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import {
-  Download,
-  Film,
-  Sparkles,
-  Settings,
-  AlertCircle,
-  Loader2,
-  Copy,
-  Check,
-} from 'lucide-react';
+import { Icon } from '@iconify/react';
 import { useStore } from '../store';
 import {
   fetchEncoders,
@@ -145,22 +136,23 @@ export default function ExportStep() {
   const clipDuration = ((edit.clip_end ?? videoMeta?.duration ?? 60) - edit.clip_start).toFixed(1);
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.6fr', gap: 24, alignItems: 'start' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.6fr', gap: 24, alignItems: 'start', maxWidth: 1100, margin: '0 auto', width: '100%' }}>
       {/* Kolom Kiri: Player Hasil Render & Final Preview */}
       <div
         style={{
-          background: '#12121A',
-          border: '1px solid rgba(255,255,255,0.08)',
-          borderRadius: 12,
+          background: '#F6F4F1',
+          border: '1px solid #D3D9D6',
+          borderRadius: 16,
           padding: 24,
           display: 'flex',
           flexDirection: 'column',
           gap: 16,
+          boxShadow: '0 1px 3px rgba(17,25,22,0.04)',
         }}
       >
-        <div style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 700, fontSize: 15, color: '#E8E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 700, fontSize: 15, color: '#111916', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span>Hasil Render / Preview 9:16</span>
-          <span style={{ fontSize: 11, color: '#C6FF3D', background: 'rgba(198,255,61,0.1)', padding: '3px 8px', borderRadius: 4 }}>
+          <span style={{ fontSize: 11, color: '#1D634E', background: 'rgba(29, 99, 78, 0.12)', padding: '3px 8px', borderRadius: 4, fontWeight: 700 }}>
             Durasi: {clipDuration}s · {edit.resolution}p
           </span>
         </div>
@@ -173,11 +165,11 @@ export default function ExportStep() {
             maxWidth: 340,
             margin: '0 auto',
             aspectRatio: '9/16',
-            background: '#000',
-            borderRadius: 10,
+            background: '#000000',
+            borderRadius: 12,
             overflow: 'hidden',
-            boxShadow: '0 10px 40px rgba(0,0,0,0.8)',
-            border: '1px solid rgba(255,255,255,0.1)',
+            boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
+            border: '1px solid #D3D9D6',
           }}
         >
           {exportUrl ? (
@@ -200,14 +192,14 @@ export default function ExportStep() {
                   position: 'absolute',
                   top: 10,
                   left: 10,
-                  background: 'rgba(0,0,0,0.8)',
-                  padding: '3px 8px',
+                  background: 'rgba(17,25,22,0.85)',
+                  padding: '4px 8px',
                   borderRadius: 4,
                   fontSize: 10,
-                  color: '#E100FF',
+                  color: '#F6F4F1',
                   fontFamily: "'Montserrat', sans-serif",
                   fontWeight: 700,
-                  border: '1px solid rgba(225,0,255,0.4)',
+                  border: '1px solid #D3D9D6',
                 }}
               >
                 ONLINE YOUTUBE PREVIEW
@@ -229,11 +221,11 @@ export default function ExportStep() {
                   position: 'absolute',
                   top: 10,
                   left: 10,
-                  background: 'rgba(0,0,0,0.75)',
-                  padding: '3px 8px',
+                  background: 'rgba(17,25,22,0.85)',
+                  padding: '4px 8px',
                   borderRadius: 4,
                   fontSize: 10,
-                  color: '#C6FF3D',
+                  color: '#1D634E',
                   fontFamily: "'Montserrat', sans-serif",
                   fontWeight: 700,
                 }}
@@ -256,30 +248,30 @@ export default function ExportStep() {
                 justifyContent: 'center',
                 gap: 8,
                 padding: '12px 20px',
-                borderRadius: 8,
-                background: '#C6FF3D',
-                color: '#0B0B10',
+                borderRadius: 10,
+                background: '#1D634E',
+                color: '#F6F4F1',
                 fontFamily: "'Montserrat', sans-serif",
                 fontWeight: 800,
                 fontSize: 13,
                 textDecoration: 'none',
                 letterSpacing: '0.04em',
-                boxShadow: '0 0 20px rgba(198,255,61,0.3)',
+                boxShadow: '0 2px 10px rgba(29, 99, 78, 0.3)',
               }}
             >
-              <Download size={16} />
+              <Icon icon="solar:download-minimalistic-bold-duotone" width={18} height={18} />
               DOWNLOAD VIDEO MP4
             </a>
-            <div style={{ fontSize: 11, color: '#7A7A8A', textAlign: 'center' }}>
-              Dirender dengan encoder: <strong style={{ color: '#E8E8F0' }}>{usedEncoder}</strong>
+            <div style={{ fontSize: 11, color: '#5A635F', textAlign: 'center' }}>
+              Dirender dengan encoder: <strong style={{ color: '#111916' }}>{usedEncoder}</strong>
             </div>
           </div>
         )}
 
         {/* Riwayat Render Sesi Ini */}
         {renderHistory.length > 0 && (
-          <div style={{ marginTop: 10, borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 12 }}>
-            <div style={{ fontSize: 11, fontFamily: "'Montserrat', sans-serif", fontWeight: 700, color: '#7A7A8A', marginBottom: 8 }}>
+          <div style={{ marginTop: 10, borderTop: '1px solid #D3D9D6', paddingTop: 12 }}>
+            <div style={{ fontSize: 11, fontFamily: "'Montserrat', sans-serif", fontWeight: 700, color: '#5A635F', marginBottom: 8 }}>
               RIWAYAT RENDER SESI INI ({renderHistory.length})
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 120, overflowY: 'auto' }}>
@@ -292,15 +284,16 @@ export default function ExportStep() {
                     justifyContent: 'space-between',
                     padding: '6px 10px',
                     borderRadius: 6,
-                    background: '#17171F',
+                    background: '#EFF2F0',
                     fontSize: 11,
+                    border: '1px solid #D3D9D6',
                   }}
                 >
-                  <span className="truncate" style={{ color: '#E8E8F0', maxWidth: 180 }}>{item.filename}</span>
+                  <span className="truncate" style={{ color: '#111916', maxWidth: 180 }}>{item.filename}</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ color: '#7A7A8A', fontSize: 10 }}>{item.time}</span>
-                    <a href={item.url} download={item.filename} style={{ color: '#C6FF3D' }}>
-                      <Download size={12} />
+                    <span style={{ color: '#5A635F', fontSize: 10 }}>{item.time}</span>
+                    <a href={item.url} download={item.filename} style={{ color: '#1D634E' }}>
+                      <Icon icon="solar:download-minimalistic-bold-duotone" width={14} height={14} />
                     </a>
                   </div>
                 </div>
@@ -315,24 +308,25 @@ export default function ExportStep() {
         {/* Panel Pengaturan Render */}
         <div
           style={{
-            background: '#12121A',
-            border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: 12,
+            background: '#F6F4F1',
+            border: '1px solid #D3D9D6',
+            borderRadius: 16,
             padding: 24,
             display: 'flex',
             flexDirection: 'column',
             gap: 16,
+            boxShadow: '0 1px 3px rgba(17,25,22,0.04)',
           }}
         >
-          <div style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 700, fontSize: 14, color: '#E8E8F0', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Settings size={15} style={{ color: '#C6FF3D' }} />
+          <div style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 700, fontSize: 14, color: '#111916', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Icon icon="solar:settings-bold-duotone" width={18} height={18} style={{ color: '#1D634E' }} />
             PENGATURAN EXPORT FFmpeg
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             {/* Resolusi */}
             <div>
-              <label style={{ display: 'block', fontSize: 11, color: '#7A7A8A', marginBottom: 4, fontWeight: 600 }}>
+              <label style={{ display: 'block', fontSize: 11, color: '#5A635F', marginBottom: 4, fontWeight: 700 }}>
                 RESOLUSI VERTICAL
               </label>
               <select
@@ -340,10 +334,10 @@ export default function ExportStep() {
                 onChange={(e) => setEdit({ resolution: parseInt(e.target.value, 10) as 1080 | 720 })}
                 style={{
                   width: '100%',
-                  background: '#0B0B10',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  borderRadius: 6,
-                  color: '#E8E8F0',
+                  background: '#EFF2F0',
+                  border: '1px solid #D3D9D6',
+                  borderRadius: 8,
+                  color: '#111916',
                   padding: '8px 10px',
                   fontSize: 12,
                   outline: 'none',
@@ -356,7 +350,7 @@ export default function ExportStep() {
 
             {/* Hardware Encoder */}
             <div>
-              <label style={{ display: 'block', fontSize: 11, color: '#7A7A8A', marginBottom: 4, fontWeight: 600 }}>
+              <label style={{ display: 'block', fontSize: 11, color: '#5A635F', marginBottom: 4, fontWeight: 700 }}>
                 ENCODER VIDEO
               </label>
               <select
@@ -364,10 +358,10 @@ export default function ExportStep() {
                 onChange={(e) => setEdit({ encoder: e.target.value })}
                 style={{
                   width: '100%',
-                  background: '#0B0B10',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  borderRadius: 6,
-                  color: '#E8E8F0',
+                  background: '#EFF2F0',
+                  border: '1px solid #D3D9D6',
+                  borderRadius: 8,
+                  color: '#111916',
                   padding: '8px 10px',
                   fontSize: 12,
                   outline: 'none',
@@ -386,9 +380,9 @@ export default function ExportStep() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             {/* CRF Kualitas */}
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#7A7A8A', marginBottom: 4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#5A635F', marginBottom: 4 }}>
                 <span>KUALITAS (CRF)</span>
-                <span style={{ color: '#C6FF3D' }}>{edit.crf} (Semakin kecil semakin tajam)</span>
+                <span style={{ color: '#1D634E', fontWeight: 700 }}>{edit.crf} (Semakin kecil semakin tajam)</span>
               </div>
               <input
                 type="range"
@@ -403,7 +397,7 @@ export default function ExportStep() {
 
             {/* FPS */}
             <div>
-              <label style={{ display: 'block', fontSize: 11, color: '#7A7A8A', marginBottom: 4, fontWeight: 600 }}>
+              <label style={{ display: 'block', fontSize: 11, color: '#5A635F', marginBottom: 4, fontWeight: 700 }}>
                 FRAME RATE (FPS)
               </label>
               <select
@@ -411,10 +405,10 @@ export default function ExportStep() {
                 onChange={(e) => setEdit({ fps: e.target.value ? parseInt(e.target.value, 10) : null })}
                 style={{
                   width: '100%',
-                  background: '#0B0B10',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  borderRadius: 6,
-                  color: '#E8E8F0',
+                  background: '#EFF2F0',
+                  border: '1px solid #D3D9D6',
+                  borderRadius: 8,
+                  color: '#111916',
                   padding: '8px 10px',
                   fontSize: 12,
                   outline: 'none',
@@ -439,17 +433,17 @@ export default function ExportStep() {
                 justifyContent: 'center',
                 gap: 6,
                 padding: '12px 14px',
-                borderRadius: 8,
-                border: '1px solid rgba(255,255,255,0.15)',
-                background: 'transparent',
-                color: '#E8E8F0',
+                borderRadius: 10,
+                border: '1px solid #D3D9D6',
+                background: '#EFF2F0',
+                color: '#111916',
                 fontFamily: "'Montserrat', sans-serif",
                 fontWeight: 700,
                 fontSize: 11,
                 cursor: rendering ? 'not-allowed' : 'pointer',
               }}
             >
-              <Film size={14} />
+              <Icon icon="solar:videocamera-record-bold-duotone" width={16} height={16} />
               Render Cepat 5 Detik
             </button>
 
@@ -463,37 +457,41 @@ export default function ExportStep() {
                 justifyContent: 'center',
                 gap: 8,
                 padding: '12px 20px',
-                borderRadius: 8,
+                borderRadius: 10,
                 border: 'none',
-                background: '#C6FF3D',
-                color: '#0B0B10',
+                background: '#1D634E',
+                color: '#F6F4F1',
                 fontFamily: "'Montserrat', sans-serif",
                 fontWeight: 800,
                 fontSize: 13,
                 cursor: rendering ? 'not-allowed' : 'pointer',
                 letterSpacing: '0.04em',
-                boxShadow: '0 0 25px rgba(198,255,61,0.25)',
+                boxShadow: '0 2px 12px rgba(29, 99, 78, 0.3)',
               }}
             >
-              {rendering ? <Loader2 size={16} className="animate-spin" /> : <Film size={16} />}
+              {rendering ? (
+                <Icon icon="solar:refresh-circle-bold-duotone" width={18} height={18} className="animate-spin" />
+              ) : (
+                <Icon icon="solar:videocamera-record-bold-duotone" width={18} height={18} />
+              )}
               {rendering ? 'SEDANG MERENDER...' : `RENDER KLIP ${edit.resolution}P`}
             </button>
           </div>
 
           {/* Indikator Progres Render Nyata */}
           {rendering && (
-            <div style={{ marginTop: 8, background: '#0B0B10', padding: 12, borderRadius: 8, border: '1px solid rgba(255,255,255,0.06)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#7A7A8A', marginBottom: 6 }}>
+            <div style={{ marginTop: 8, background: '#EFF2F0', padding: 12, borderRadius: 8, border: '1px solid #D3D9D6' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#5A635F', marginBottom: 6 }}>
                 <span>Memproses video dengan FFmpeg...</span>
-                <span style={{ color: '#C6FF3D', fontWeight: 700 }}>
+                <span style={{ color: '#1D634E', fontWeight: 700 }}>
                   {renderProgress}% {renderEta !== null ? `(ETA: ${renderEta}s)` : ''}
                 </span>
               </div>
-              <div style={{ height: 6, background: 'rgba(255,255,255,0.08)', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{ height: 6, background: '#D3D9D6', borderRadius: 3, overflow: 'hidden' }}>
                 <div
                   style={{
                     height: '100%',
-                    background: '#C6FF3D',
+                    background: '#1D634E',
                     width: `${renderProgress}%`,
                     transition: 'width 0.4s ease',
                   }}
@@ -503,8 +501,8 @@ export default function ExportStep() {
           )}
 
           {renderError && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#FF5A36', fontSize: 12 }}>
-              <AlertCircle size={15} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#B54329', fontSize: 12, background: 'rgba(181, 67, 41, 0.08)', padding: '10px 14px', borderRadius: 8 }}>
+              <Icon icon="solar:danger-circle-bold-duotone" width={16} height={16} />
               {renderError}
             </div>
           )}
@@ -513,18 +511,19 @@ export default function ExportStep() {
         {/* Panel AI Metadata: Judul, Deskripsi, Hashtag */}
         <div
           style={{
-            background: '#12121A',
-            border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: 12,
+            background: '#F6F4F1',
+            border: '1px solid #D3D9D6',
+            borderRadius: 16,
             padding: 24,
             display: 'flex',
             flexDirection: 'column',
             gap: 14,
+            boxShadow: '0 1px 3px rgba(17,25,22,0.04)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 700, fontSize: 14, color: '#E8E8F0', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Sparkles size={15} style={{ color: '#C6FF3D' }} />
+            <span style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 700, fontSize: 14, color: '#111916', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Icon icon="solar:magic-stick-3-bold-duotone" width={18} height={18} style={{ color: '#1D634E' }} />
               METADATA POSTING MEDSOS
             </span>
             <button
@@ -534,18 +533,22 @@ export default function ExportStep() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 6,
-                padding: '6px 12px',
-                borderRadius: 6,
+                padding: '6px 14px',
+                borderRadius: 8,
                 border: 'none',
-                background: 'rgba(198,255,61,0.15)',
-                color: '#C6FF3D',
+                background: '#1D634E',
+                color: '#F6F4F1',
                 fontFamily: "'Montserrat', sans-serif",
                 fontWeight: 700,
                 fontSize: 11,
                 cursor: loadingMeta ? 'not-allowed' : 'pointer',
               }}
             >
-              {loadingMeta ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+              {loadingMeta ? (
+                <Icon icon="solar:refresh-circle-bold-duotone" width={14} height={14} className="animate-spin" />
+              ) : (
+                <Icon icon="solar:magic-stick-3-bold-duotone" width={14} height={14} />
+              )}
               Generate Judul &amp; Tag
             </button>
           </div>
@@ -554,47 +557,47 @@ export default function ExportStep() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {/* Judul Posting */}
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#7A7A8A', marginBottom: 2 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#5A635F', marginBottom: 2 }}>
                   <span>JUDUL KONTEN</span>
                   <button
                     onClick={() => copyToClipboard(metaResult.title, 'title')}
-                    style={{ background: 'none', border: 'none', color: copiedField === 'title' ? '#C6FF3D' : '#7A7A8A', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 2, fontSize: 10 }}
+                    style={{ background: 'none', border: 'none', color: copiedField === 'title' ? '#1D634E' : '#5A635F', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 2, fontSize: 10, fontWeight: 700 }}
                   >
-                    {copiedField === 'title' ? <Check size={10} /> : <Copy size={10} />}
+                    <Icon icon={copiedField === 'title' ? 'solar:check-circle-bold-duotone' : 'solar:copy-bold-duotone'} width={12} height={12} />
                     {copiedField === 'title' ? 'Tersalin' : 'Salin'}
                   </button>
                 </div>
-                <div style={{ background: '#0B0B10', padding: '8px 10px', borderRadius: 6, fontSize: 12, color: '#E8E8F0', fontWeight: 600 }}>
+                <div style={{ background: '#EFF2F0', padding: '10px 12px', borderRadius: 8, fontSize: 12, color: '#111916', fontWeight: 600, border: '1px solid #D3D9D6' }}>
                   {metaResult.title}
                 </div>
               </div>
 
               {/* Deskripsi */}
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#7A7A8A', marginBottom: 2 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#5A635F', marginBottom: 2 }}>
                   <span>DESKRIPSI / CAPTION</span>
                   <button
                     onClick={() => copyToClipboard(metaResult.description, 'desc')}
-                    style={{ background: 'none', border: 'none', color: copiedField === 'desc' ? '#C6FF3D' : '#7A7A8A', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 2, fontSize: 10 }}
+                    style={{ background: 'none', border: 'none', color: copiedField === 'desc' ? '#1D634E' : '#5A635F', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 2, fontSize: 10, fontWeight: 700 }}
                   >
-                    {copiedField === 'desc' ? <Check size={10} /> : <Copy size={10} />}
+                    <Icon icon={copiedField === 'desc' ? 'solar:check-circle-bold-duotone' : 'solar:copy-bold-duotone'} width={12} height={12} />
                     {copiedField === 'desc' ? 'Tersalin' : 'Salin'}
                   </button>
                 </div>
-                <div style={{ background: '#0B0B10', padding: '8px 10px', borderRadius: 6, fontSize: 12, color: '#E8E8F0', lineHeight: 1.5 }}>
+                <div style={{ background: '#EFF2F0', padding: '10px 12px', borderRadius: 8, fontSize: 12, color: '#111916', lineHeight: 1.5, border: '1px solid #D3D9D6' }}>
                   {metaResult.description}
                 </div>
               </div>
 
               {/* Hashtag */}
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#7A7A8A', marginBottom: 2 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#5A635F', marginBottom: 2 }}>
                   <span>HASHTAG VIRAL</span>
                   <button
                     onClick={() => copyToClipboard(metaResult.hashtags.join(' '), 'tags')}
-                    style={{ background: 'none', border: 'none', color: copiedField === 'tags' ? '#C6FF3D' : '#7A7A8A', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 2, fontSize: 10 }}
+                    style={{ background: 'none', border: 'none', color: copiedField === 'tags' ? '#1D634E' : '#5A635F', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 2, fontSize: 10, fontWeight: 700 }}
                   >
-                    {copiedField === 'tags' ? <Check size={10} /> : <Copy size={10} />}
+                    <Icon icon={copiedField === 'tags' ? 'solar:check-circle-bold-duotone' : 'solar:copy-bold-duotone'} width={12} height={12} />
                     {copiedField === 'tags' ? 'Tersalin' : 'Salin Semua'}
                   </button>
                 </div>
@@ -604,11 +607,12 @@ export default function ExportStep() {
                       key={tag}
                       style={{
                         fontSize: 11,
-                        padding: '3px 8px',
-                        borderRadius: 4,
-                        background: 'rgba(198,255,61,0.1)',
-                        color: '#C6FF3D',
-                        fontWeight: 600,
+                        padding: '4px 10px',
+                        borderRadius: 6,
+                        background: 'rgba(29, 99, 78, 0.12)',
+                        color: '#1D634E',
+                        fontWeight: 700,
+                        border: '1px solid rgba(29, 99, 78, 0.2)',
                       }}
                     >
                       {tag}

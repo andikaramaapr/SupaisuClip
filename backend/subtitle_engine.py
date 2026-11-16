@@ -309,6 +309,139 @@ def apply_highlight(text: str, words: list[str], hl_ass: str, base_ass: str) -> 
 
 
 # ----------------------------------------------------------- pembangun -----
+def generate_kinetic_cue_text(
+    cue_text: str,
+    cue_duration_sec: float,
+    anim_type: str,
+    base_color_ass: str,
+    outline_color_ass: str,
+    highlight_color_ass: str,
+    highlight_words: list[str] | None = None,
+    outline_val: int = 4,
+    word_timings_cue: list[dict] | None = None,  # [{word, start_ms, end_ms}] relatif dari awal cue
+) -> str:
+    """
+    Menghasilkan teks ASS dengan tag animasi kinetic per-kata (\\t, \\fscx, \\alpha, dll).
+    Durasi kata dihitung proporsional terhadap panjang karakter dengan batas minimal 80ms.
+    Jika word_timings_cue tersedia dan jumlah kata cocok, gunakan timing asli per kata.
+    """
+    if anim_type == "pop_in":
+        anim_type = "spring_pop"
+    elif anim_type == "fade_up":
+        anim_type = "blur_reveal"
+    elif anim_type == "zoom_soft":
+        anim_type = "word_bounce"
+
+    if anim_type == "none":
+        escaped = escape_ass_text(cue_text)
+        return apply_highlight(escaped, highlight_words or [], highlight_color_ass, base_color_ass)
+
+    lines = cue_text.split("\n")
+    line_words = [line.split() for line in lines]
+    all_words = [w for line in line_words for w in line]
+    num_words = len(all_words)
+    if num_words == 0:
+        return ""
+
+    cue_dur_ms = max(200, int(cue_duration_sec * 1000))
+    total_chars = sum(len(w) for w in all_words) or 1
+    min_word_ms = 80
+
+    # Gunakan word_timings_cue jika tersedia dan jumlah kata cocok (timestamp asli per kata)
+    if word_timings_cue and len(word_timings_cue) == num_words:
+        word_timings = [(int(wt.get("start_ms", 0)), int(wt.get("end_ms", cue_dur_ms))) for wt in word_timings_cue]
+    else:
+        if cue_dur_ms <= num_words * min_word_ms:
+            word_durs = [cue_dur_ms / num_words] * num_words
+        else:
+            rem_ms = cue_dur_ms - (num_words * min_word_ms)
+            word_durs = [min_word_ms + rem_ms * (len(w) / total_chars) for w in all_words]
+
+        word_timings = []
+        cur_ms = 0.0
+        for i, dur in enumerate(word_durs):
+            t_start = int(cur_ms)
+            t_end = int(cur_ms + dur) if i < num_words - 1 else cue_dur_ms
+            cur_ms += dur
+            word_timings.append((t_start, t_end))
+
+    c_base = _ass_bgr(base_color_ass)
+    c_hl = _ass_bgr(highlight_color_ass)
+    c_out = _ass_bgr(outline_color_ass)
+    hl_clean = [hw.strip().lower() for hw in (highlight_words or []) if hw and hw.strip()]
+
+    word_idx = 0
+    rendered_lines = []
+
+    for line in line_words:
+        line_parts = []
+        for w in line:
+            t_s, t_e = word_timings[word_idx]
+            clean_w = re.sub(r"[^\w]", "", w).lower()
+            is_keyword = any(hw in clean_w for hw in hl_clean) if hl_clean else False
+            c_initial = c_hl if is_keyword else c_base
+            c_after = c_hl if is_keyword else c_base
+            escaped_w = escape_ass_text(w)
+
+            if anim_type == "word_bounce":
+                # Semua kata terlihat. Saat diucapkan, membesar 128% -> 100% dan berubah warna ke highlight
+                t_bounce = min(t_s + 60, t_e)
+                t_settle = min(t_s + 140, t_e)
+                tag = (
+                    f"{{\\c&H{c_initial}&\\fscx100\\fscy100"
+                    f"\\t({t_s},{t_bounce},\\fscx128\\fscy128\\c&H{c_hl}&)"
+                    f"\\t({t_bounce},{t_settle},\\fscx100\\fscy100)"
+                    f"\\t({t_e},{t_e+5},\\c&H{c_after}&)}}"
+                )
+            elif anim_type == "karaoke_spotlight":
+                # Kata belum diucapkan transparan \\alpha&H88&, saat diucapkan menyala \\alpha&H00& + highlight
+                tag = (
+                    f"{{\\alpha&H88&\\c&H{c_initial}&"
+                    f"\\t({t_s},{t_s+60},\\alpha&H00&\\c&H{c_hl}&)"
+                    f"\\t({t_e},{t_e+5},\\c&H{c_after}&)}}"
+                )
+            elif anim_type == "spring_pop":
+                # Kata muncul bertahap satu per satu dari skala 0% -> 115% -> 100%
+                t_pop = min(t_s + 70, t_e)
+                t_settle = min(t_s + 140, t_e)
+                tag = (
+                    f"{{\\alpha&HFF&\\fscx0\\fscy0\\c&H{c_initial}&"
+                    f"\\t({t_s},{t_pop},\\alpha&H00&\\fscx115\\fscy115\\c&H{c_hl}&)"
+                    f"\\t({t_pop},{t_settle},\\fscx100\\fscy100\\c&H{c_after}&)}}"
+                )
+            elif anim_type == "blur_reveal":
+                # Kata muncul bertahap dari blur12\\alpha&HFF& menjadi blur0\\alpha&H00& dengan scale 108% -> 100%
+                t_rev = min(t_s + 110, t_e)
+                tag = (
+                    f"{{\\alpha&HFF&\\blur12\\fscx108\\fscy108\\c&H{c_initial}&"
+                    f"\\t({t_s},{t_rev},\\alpha&H00&\\blur0\\fscx100\\fscy100\\c&H{c_after}&)}}"
+                )
+            elif anim_type == "impact_slam":
+                # Kata menghantam masuk dari skala besar 160% -> 100% dengan transisi cepat 90ms
+                t_slam = min(t_s + 90, t_e)
+                tag = (
+                    f"{{\\alpha&HFF&\\fscx160\\fscy160\\c&H{c_initial}&"
+                    f"\\t({t_s},{t_slam},\\alpha&H00&\\fscx100\\fscy100\\c&H{c_after}&)}}"
+                )
+            elif anim_type == "neon_glow":
+                # Kata aktif memancarkan outline/glow tebal \\bord+4\\blur4\\3c{c_hl}
+                glow_bord = outline_val + 4
+                tag = (
+                    f"{{\\c&H{c_initial}&\\3c&H{c_out}&\\bord{outline_val}\\blur0"
+                    f"\\t({t_s},{t_s+60},\\c&H{c_hl}&\\3c&H{c_hl}&\\bord{glow_bord}\\blur4)"
+                    f"\\t({t_e},{t_e+60},\\c&H{c_after}&\\3c&H{c_out}&\\bord{outline_val}\\blur0)}}"
+                )
+            else:
+                tag = ""
+
+            line_parts.append(f"{tag}{escaped_w}")
+            word_idx += 1
+
+        rendered_lines.append(" ".join(line_parts))
+
+    return r"\N".join(rendered_lines)
+
+
 def build_ass_text(
     srt_text: str,
     *,
@@ -331,12 +464,14 @@ def build_ass_text(
     highlight_words: list[str] | None = None,
     highlight_color: str = "#FF3B3B",
     letter_style: str = "uppercase",      # "uppercase" | "title" | "lowercase"
-    subtitle_animation: str = "pop_in",   # "none" | "pop_in" | "fade_up" | "zoom_soft"
+    subtitle_animation: str = "word_bounce", # "none" | "word_bounce" | "karaoke_spotlight" | "spring_pop" | "blur_reveal" | "impact_slam" | "neon_glow"
     clip_start: float | None = None,
     clip_end: float | None = None,
     srt_relative: bool = False,           # True: srt_text sudah relatif klip (mulai dari 0)
     clip_duration_sec: float | None = None,
     time_shift: float = 0.0,              # geser semua event (mis. +clip_start untuk preview timeline penuh)
+    subtitle_offset_sec: float = 0.0,     # geser subtitle relatif terhadap audio (+ = subtitle lebih lambat)
+    word_timings: list[dict] | None = None,  # [{word, start, end}] dari YouTube VTT word-level timestamps
 ) -> str:
     """Return isi file ASS (string). PlayRes selalu 1080x1920."""
     st = SUBTITLE_STYLES.get(style_key, SUBTITLE_STYLES["viral_pop"]).copy()
@@ -364,6 +499,17 @@ def build_ass_text(
             clip_duration_sec = max(0.0, clip_end - clip_start)
     if clip_duration_sec is None:
         clip_duration_sec = max((e["end"] for e in entries), default=30.0)
+
+    # Terapkan subtitle_offset_sec: geser semua cue (clamp agar tidak negatif)
+    if subtitle_offset_sec != 0.0:
+        entries = [
+            {**e, "start": max(0.0, e["start"] + subtitle_offset_sec), "end": max(0.1, e["end"] + subtitle_offset_sec)}
+            for e in entries
+        ]
+
+    # Normalize word_timings (adjust for clip_start offset if absolute)
+    _wt = word_timings or []
+    _clip_base = clip_start if (clip_start is not None and not srt_relative) else 0.0
 
     # --- gaya hook ---
     if hook_mode == "text":
@@ -430,16 +576,6 @@ def build_ass_text(
                 f"{anim_tag}{escape_ass_text(htext)}"
             )
 
-    # Animasi Subtitle
-    if subtitle_animation == "pop_in":
-        sub_anim_tag = r"{\fscx85\fscy85\t(0,70,\fscx100\fscy100)}"
-    elif subtitle_animation == "fade_up":
-        sub_anim_tag = r"{\fad(90,0)}"
-    elif subtitle_animation == "zoom_soft":
-        sub_anim_tag = r"{\fscx108\fscy108\t(0,80,\fscx100\fscy100)}"
-    else:  # "none"
-        sub_anim_tag = ""
-
     words = highlight_words or []
     # Jika style_key == "none", lewati penambahan MainSub
     if style_key != "none":
@@ -453,11 +589,38 @@ def build_ass_text(
             elif letter_style == "title":
                 text = text.title()
 
-            text = escape_ass_text(text)
-            text = apply_highlight(text, words, hex_to_ass(highlight_color, "&H003B3BFF"), st["primary"])
+            cue_dur = max(0.2, e["end"] - e["start"])
+
+            # Cari word_timings yang cocok dengan rentang waktu cue ini (sebelum offset)
+            # e["start"] sudah digeser oleh subtitle_offset_sec, jadi cari di waktu asli
+            cue_start_orig = e["start"] - subtitle_offset_sec
+            cue_wt: list[dict] | None = None
+            if _wt:
+                # Filter word_timings yang masuk dalam rentang cue, ubah ke waktu relatif (ms dari awal cue)
+                cue_words = [
+                    {"word": wt.get("word", ""), "start_ms": int((wt["start"] - _clip_base - cue_start_orig) * 1000),
+                     "end_ms": int((wt["end"] - _clip_base - cue_start_orig) * 1000)}
+                    for wt in _wt
+                    if wt.get("start", -1) - _clip_base >= cue_start_orig - 0.05
+                    and wt.get("end", -1) - _clip_base <= cue_start_orig + cue_dur + 0.05
+                ]
+                if cue_words:
+                    cue_wt = cue_words
+
+            kinetic_text = generate_kinetic_cue_text(
+                text,
+                cue_duration_sec=cue_dur,
+                anim_type=subtitle_animation,
+                base_color_ass=st["primary"],
+                outline_color_ass=st["outline"],
+                highlight_color_ass=hex_to_ass(highlight_color, "&H003B3BFF"),
+                highlight_words=words,
+                outline_val=outline_val,
+                word_timings_cue=cue_wt,
+            )
             events.append(
                 f"Dialogue: 1,{seconds_to_ass(time_shift + e['start'])},{seconds_to_ass(time_shift + e['end'])},"
-                f"MainSub,,0,0,0,,{sub_anim_tag}{text}"
+                f"MainSub,,0,0,0,,{kinetic_text}"
             )
 
     return header + "\n".join(events) + "\n"

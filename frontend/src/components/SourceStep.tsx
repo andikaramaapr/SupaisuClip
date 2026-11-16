@@ -1,16 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import {
-  Tv,
-  Upload,
-  FileText,
-  AlertCircle,
-  CheckCircle2,
-  Loader2,
-  Film,
-  ArrowRight,
-  RotateCcw,
-  Sparkles,
-} from 'lucide-react';
+import { Icon } from '@iconify/react';
 import { useStore } from '../store';
 import {
   fetchYoutubeInfo,
@@ -263,14 +252,14 @@ export default function SourceStep() {
   );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 960, margin: '0 auto', width: '100%' }}>
       {/* Tab Switcher: YouTube Link vs Upload Video */}
       <div
         style={{
           display: 'flex',
-          background: '#12121A',
-          border: '1px solid rgba(255,255,255,0.08)',
-          borderRadius: 10,
+          background: '#EFF2F0',
+          border: '1px solid #D3D9D6',
+          borderRadius: 12,
           padding: 4,
           width: 'fit-content',
         }}
@@ -281,20 +270,20 @@ export default function SourceStep() {
             display: 'flex',
             alignItems: 'center',
             gap: 8,
-            padding: '8px 18px',
-            borderRadius: 7,
+            padding: '8px 20px',
+            borderRadius: 8,
             border: 'none',
             cursor: 'pointer',
             fontSize: 12,
             fontFamily: "'Montserrat', sans-serif",
             fontWeight: 700,
             letterSpacing: '0.04em',
-            background: activeTab === 'youtube' ? 'rgba(198,255,61,0.15)' : 'transparent',
-            color: activeTab === 'youtube' ? '#C6FF3D' : '#7A7A8A',
-            transition: 'all 0.15s',
+            background: activeTab === 'youtube' ? '#1D634E' : 'transparent',
+            color: activeTab === 'youtube' ? '#F6F4F1' : '#5A635F',
+            transition: 'all 0.15s ease',
           }}
         >
-          <Tv size={15} />
+          <Icon icon="solar:link-circle-bold-duotone" width={18} height={18} />
           YOUTUBE URL
         </button>
         <button
@@ -303,20 +292,20 @@ export default function SourceStep() {
             display: 'flex',
             alignItems: 'center',
             gap: 8,
-            padding: '8px 18px',
-            borderRadius: 7,
+            padding: '8px 20px',
+            borderRadius: 8,
             border: 'none',
             cursor: 'pointer',
             fontSize: 12,
             fontFamily: "'Montserrat', sans-serif",
             fontWeight: 700,
             letterSpacing: '0.04em',
-            background: activeTab === 'upload' ? 'rgba(198,255,61,0.15)' : 'transparent',
-            color: activeTab === 'upload' ? '#C6FF3D' : '#7A7A8A',
-            transition: 'all 0.15s',
+            background: activeTab === 'upload' ? '#1D634E' : 'transparent',
+            color: activeTab === 'upload' ? '#F6F4F1' : '#5A635F',
+            transition: 'all 0.15s ease',
           }}
         >
-          <Upload size={15} />
+          <Icon icon="solar:upload-track-bold-duotone" width={18} height={18} />
           UPLOAD VIDEO
         </button>
       </div>
@@ -325,21 +314,22 @@ export default function SourceStep() {
       {activeTab === 'youtube' && (
         <div
           style={{
-            background: '#12121A',
-            border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: 12,
+            background: '#F6F4F1',
+            border: '1px solid #D3D9D6',
+            borderRadius: 16,
             padding: 24,
             display: 'flex',
             flexDirection: 'column',
             gap: 20,
+            boxShadow: '0 1px 3px rgba(17,25,22,0.04)',
           }}
         >
           <div>
-            <div style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 800, fontSize: 16, color: '#E8E8F0', marginBottom: 6 }}>
+            <div style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 800, fontSize: 16, color: '#111916', marginBottom: 6 }}>
               Ambil Subtitle &amp; Video dari YouTube
             </div>
-            <div style={{ fontSize: 12, color: '#7A7A8A', lineHeight: 1.5 }}>
-              Masukkan link YouTube. Subtitle akan langsung diambil dan dimuat dalam beberapa detik agar kamu bisa segera memilih momen viral di Tahap 2. Video utuh baru diunduh saat kamu melanjutkan ke pengeditan.
+            <div style={{ fontSize: 13, color: '#5A635F', lineHeight: 1.5 }}>
+              Masukkan link YouTube. Subtitle akan langsung dimuat dalam beberapa detik agar kamu bisa segera memilih momen viral di Tahap 2. Video utuh baru diunduh saat kamu melanjutkan ke pengeditan.
             </div>
           </div>
 
@@ -356,11 +346,11 @@ export default function SourceStep() {
               disabled={loadingInfo}
               style={{
                 flex: 1,
-                background: '#0B0B10',
-                border: '1px solid rgba(255,255,255,0.12)',
-                borderRadius: 8,
-                padding: '10px 14px',
-                color: '#E8E8F0',
+                background: '#EFF2F0',
+                border: '1px solid #D3D9D6',
+                borderRadius: 10,
+                padding: '12px 16px',
+                color: '#111916',
                 fontSize: 13,
                 outline: 'none',
               }}
@@ -372,27 +362,32 @@ export default function SourceStep() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 8,
-                padding: '10px 22px',
-                borderRadius: 8,
+                padding: '12px 24px',
+                borderRadius: 10,
                 border: 'none',
                 cursor: loadingInfo || !ytUrl.trim() ? 'not-allowed' : 'pointer',
                 fontFamily: "'Montserrat', sans-serif",
                 fontWeight: 700,
-                fontSize: 12,
-                background: '#C6FF3D',
-                color: '#0B0B10',
+                fontSize: 13,
+                background: '#1D634E',
+                color: '#F6F4F1',
                 opacity: loadingInfo || !ytUrl.trim() ? 0.5 : 1,
-                boxShadow: ytUrl.trim() ? '0 0 16px rgba(198,255,61,0.2)' : 'none',
+                boxShadow: ytUrl.trim() ? '0 2px 8px rgba(29, 99, 78, 0.25)' : 'none',
+                transition: 'all 0.15s ease',
               }}
             >
-              {loadingInfo ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+              {loadingInfo ? (
+                <Icon icon="solar:refresh-circle-bold-duotone" width={18} height={18} className="animate-spin" />
+              ) : (
+                <Icon icon="solar:magic-stick-3-bold-duotone" width={18} height={18} />
+              )}
               {loadingInfo ? 'Mengambil Subtitle...' : 'Ambil Subtitle & Info'}
             </button>
           </div>
 
           {infoError && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#FF5A36', fontSize: 12 }}>
-              <AlertCircle size={14} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#B54329', fontSize: 13, background: 'rgba(181, 67, 41, 0.08)', padding: '10px 14px', borderRadius: 8 }}>
+              <Icon icon="solar:danger-circle-bold-duotone" width={16} height={16} />
               {infoError}
             </div>
           )}
@@ -402,32 +397,32 @@ export default function SourceStep() {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: '220px 1fr',
+                gridTemplateColumns: '240px 1fr',
                 gap: 20,
-                background: '#17171F',
-                border: '1px solid rgba(198,255,61,0.15)',
-                borderRadius: 10,
-                padding: 16,
+                background: '#EFF2F0',
+                border: '1px solid #D3D9D6',
+                borderRadius: 12,
+                padding: 18,
               }}
             >
               <img
                 src={youtubeInfo.thumbnail}
                 alt="Thumbnail"
-                style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover', borderRadius: 6 }}
+                style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover', borderRadius: 8 }}
               />
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 700, fontSize: 14, color: '#E8E8F0' }}>
+                <div style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 700, fontSize: 15, color: '#111916' }}>
                   {youtubeInfo.title}
                 </div>
-                <div style={{ fontSize: 12, color: '#7A7A8A', display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-                  <span>Channel: <strong style={{ color: '#E8E8F0' }}>{youtubeInfo.uploader}</strong></span>
-                  <span>Durasi: <strong style={{ color: '#E8E8F0' }}>{formatSeconds(youtubeInfo.duration)}</strong></span>
-                  <span>Resolusi: <strong style={{ color: '#E8E8F0' }}>{youtubeInfo.width}x{youtubeInfo.height}</strong></span>
+                <div style={{ fontSize: 12, color: '#5A635F', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                  <span>Channel: <strong style={{ color: '#111916' }}>{youtubeInfo.uploader}</strong></span>
+                  <span>Durasi: <strong style={{ color: '#111916' }}>{formatSeconds(youtubeInfo.duration)}</strong></span>
+                  <span>Resolusi: <strong style={{ color: '#111916' }}>{youtubeInfo.width}x{youtubeInfo.height}</strong></span>
                 </div>
 
                 {/* Pemilih Subtitle Bawaan YouTube */}
                 <div style={{ marginTop: 6 }}>
-                  <label style={{ display: 'block', fontSize: 11, fontFamily: "'Montserrat', sans-serif", fontWeight: 700, color: '#7A7A8A', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <label style={{ display: 'block', fontSize: 11, fontFamily: "'Montserrat', sans-serif", fontWeight: 700, color: '#5A635F', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Pilih Track Subtitle YouTube:
                   </label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -439,14 +434,14 @@ export default function SourceStep() {
                       }}
                       disabled={switchingSub}
                       style={{
-                        background: '#0B0B10',
-                        border: '1px solid rgba(255,255,255,0.12)',
-                        borderRadius: 6,
-                        color: '#E8E8F0',
+                        background: '#F6F4F1',
+                        border: '1px solid #D3D9D6',
+                        borderRadius: 8,
+                        color: '#111916',
                         padding: '8px 12px',
                         fontSize: 12,
                         outline: 'none',
-                        maxWidth: 380,
+                        maxWidth: 400,
                         cursor: switchingSub ? 'wait' : 'pointer',
                       }}
                     >
@@ -464,8 +459,8 @@ export default function SourceStep() {
                     </select>
 
                     {switchingSub && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#C6FF3D' }}>
-                        <Loader2 size={12} className="animate-spin" />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#1D634E' }}>
+                        <Icon icon="solar:refresh-circle-bold-duotone" width={14} height={14} className="animate-spin" />
                         Memuat subtitle...
                       </div>
                     )}
@@ -473,8 +468,8 @@ export default function SourceStep() {
                 </div>
 
                 {/* Status info */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#C6FF3D', marginTop: 4 }}>
-                  <CheckCircle2 size={13} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#1D634E', marginTop: 4 }}>
+                  <Icon icon="solar:check-circle-bold-duotone" width={16} height={16} />
                   <span>Metadata &amp; Subtitle telah siap! Kamu bisa langsung lanjut ke Analisis AI di bawah.</span>
                 </div>
               </div>
@@ -487,20 +482,21 @@ export default function SourceStep() {
       {activeTab === 'upload' && (
         <div
           style={{
-            background: '#12121A',
-            border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: 12,
+            background: '#F6F4F1',
+            border: '1px solid #D3D9D6',
+            borderRadius: 16,
             padding: 24,
             display: 'flex',
             flexDirection: 'column',
             gap: 16,
+            boxShadow: '0 1px 3px rgba(17,25,22,0.04)',
           }}
         >
           <div>
-            <div style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 800, fontSize: 16, color: '#E8E8F0', marginBottom: 6 }}>
+            <div style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 800, fontSize: 16, color: '#111916', marginBottom: 6 }}>
               Upload Video Lokal (.mp4, .mov, .webm)
             </div>
-            <div style={{ fontSize: 12, color: '#7A7A8A', lineHeight: 1.5 }}>
+            <div style={{ fontSize: 13, color: '#5A635F', lineHeight: 1.5 }}>
               Pilih file video dan file SRT opsional dari komputer kamu.
             </div>
           </div>
@@ -510,13 +506,13 @@ export default function SourceStep() {
             <div
               onClick={() => videoInputRef.current?.click()}
               style={{
-                border: '1.5px dashed rgba(255,255,255,0.15)',
-                borderRadius: 10,
-                padding: '24px 16px',
+                border: '1.5px dashed #D3D9D6',
+                borderRadius: 12,
+                padding: '28px 16px',
                 textAlign: 'center',
                 cursor: 'pointer',
-                background: 'rgba(255,255,255,0.02)',
-                transition: 'all 0.15s',
+                background: '#EFF2F0',
+                transition: 'all 0.15s ease',
               }}
             >
               <input
@@ -526,11 +522,13 @@ export default function SourceStep() {
                 style={{ display: 'none' }}
                 onChange={(e) => setLocalVideoFile(e.target.files?.[0] ?? null)}
               />
-              <Film size={28} style={{ color: '#C6FF3D', margin: '0 auto 10px' }} />
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#E8E8F0' }}>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10, color: '#1D634E' }}>
+                <Icon icon="solar:videocamera-record-bold-duotone" width={32} height={32} />
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#111916' }}>
                 {localVideoFile ? localVideoFile.name : 'Pilih File Video (.mp4 / .mov)'}
               </div>
-              <div style={{ fontSize: 11, color: '#7A7A8A', marginTop: 4 }}>
+              <div style={{ fontSize: 11, color: '#5A635F', marginTop: 4 }}>
                 {localVideoFile ? `${(localVideoFile.size / (1024 * 1024)).toFixed(1)} MB` : 'Klik untuk mencari file'}
               </div>
             </div>
@@ -539,13 +537,13 @@ export default function SourceStep() {
             <div
               onClick={() => srtInputRef.current?.click()}
               style={{
-                border: '1.5px dashed rgba(255,255,255,0.15)',
-                borderRadius: 10,
-                padding: '24px 16px',
+                border: '1.5px dashed #D3D9D6',
+                borderRadius: 12,
+                padding: '28px 16px',
                 textAlign: 'center',
                 cursor: 'pointer',
-                background: 'rgba(255,255,255,0.02)',
-                transition: 'all 0.15s',
+                background: '#EFF2F0',
+                transition: 'all 0.15s ease',
               }}
             >
               <input
@@ -555,11 +553,13 @@ export default function SourceStep() {
                 style={{ display: 'none' }}
                 onChange={(e) => setLocalSrtFile(e.target.files?.[0] ?? null)}
               />
-              <FileText size={28} style={{ color: '#C6FF3D', margin: '0 auto 10px' }} />
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#E8E8F0' }}>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10, color: '#1D634E' }}>
+                <Icon icon="solar:document-text-bold-duotone" width={32} height={32} />
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#111916' }}>
                 {localSrtFile ? localSrtFile.name : 'File Subtitle .srt (Opsional)'}
               </div>
-              <div style={{ fontSize: 11, color: '#7A7A8A', marginTop: 4 }}>
+              <div style={{ fontSize: 11, color: '#5A635F', marginTop: 4 }}>
                 {localSrtFile ? 'Subtitle terpilih' : 'Akan dimuat otomatis jika dipilih'}
               </div>
             </div>
@@ -573,27 +573,31 @@ export default function SourceStep() {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 8,
-                padding: '10px 24px',
-                borderRadius: 8,
+                padding: '12px 26px',
+                borderRadius: 10,
                 border: 'none',
                 cursor: uploading || !localVideoFile ? 'not-allowed' : 'pointer',
                 fontFamily: "'Montserrat', sans-serif",
                 fontWeight: 800,
                 fontSize: 12,
-                background: '#C6FF3D',
-                color: '#0B0B10',
+                background: '#1D634E',
+                color: '#F6F4F1',
                 letterSpacing: '0.04em',
                 opacity: uploading || !localVideoFile ? 0.5 : 1,
               }}
             >
-              {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+              {uploading ? (
+                <Icon icon="solar:refresh-circle-bold-duotone" width={16} height={16} className="animate-spin" />
+              ) : (
+                <Icon icon="solar:upload-track-bold-duotone" width={16} height={16} />
+              )}
               {uploading ? 'MENGUPLOAD...' : 'UPLOAD VIDEO KE PROYEK'}
             </button>
           </div>
 
           {uploadError && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#FF5A36', fontSize: 12 }}>
-              <AlertCircle size={14} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#B54329', fontSize: 13, background: 'rgba(181, 67, 41, 0.08)', padding: '10px 14px', borderRadius: 8 }}>
+              <Icon icon="solar:danger-circle-bold-duotone" width={16} height={16} />
               {uploadError}
             </div>
           )}
@@ -603,45 +607,46 @@ export default function SourceStep() {
       {/* Editor Subtitle SRT Langsung */}
       <div
         style={{
-          background: '#12121A',
-          border: '1px solid rgba(255,255,255,0.08)',
-          borderRadius: 12,
+          background: '#F6F4F1',
+          border: '1px solid #D3D9D6',
+          borderRadius: 16,
           padding: 24,
           display: 'flex',
           flexDirection: 'column',
           gap: 16,
+          boxShadow: '0 1px 3px rgba(17,25,22,0.04)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 800, fontSize: 15, color: '#E8E8F0' }}>
+              <span style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 800, fontSize: 16, color: '#111916' }}>
                 Editor Subtitle SRT
               </span>
 
               {/* Badge Sumber Subtitle */}
               {srtSource === 'youtube-manual' && (
-                <span style={{ padding: '3px 8px', borderRadius: 4, background: 'rgba(198,255,61,0.15)', color: '#C6FF3D', fontSize: 11, fontWeight: 700 }}>
+                <span style={{ padding: '4px 10px', borderRadius: 6, background: 'rgba(29, 99, 78, 0.12)', color: '#1D634E', fontSize: 11, fontWeight: 700 }}>
                   ✓ Subtitle manual YouTube
                 </span>
               )}
               {srtSource === 'youtube-auto' && (
-                <span style={{ padding: '3px 8px', borderRadius: 4, background: 'rgba(255,170,0,0.15)', color: '#FFAA00', fontSize: 11, fontWeight: 700 }}>
+                <span style={{ padding: '4px 10px', borderRadius: 6, background: 'rgba(202, 138, 4, 0.12)', color: '#CA8A04', fontSize: 11, fontWeight: 700 }}>
                   ⚡ Auto-caption YouTube (dibersihkan)
                 </span>
               )}
               {srtSource === 'upload' && (
-                <span style={{ padding: '3px 8px', borderRadius: 4, background: 'rgba(56,189,248,0.15)', color: '#38BDF8', fontSize: 11, fontWeight: 700 }}>
+                <span style={{ padding: '4px 10px', borderRadius: 6, background: 'rgba(14, 116, 144, 0.12)', color: '#0E7490', fontSize: 11, fontWeight: 700 }}>
                   📁 File SRT Upload
                 </span>
               )}
               {srtSource === 'none' && (
-                <span style={{ padding: '3px 8px', borderRadius: 4, background: 'rgba(255,255,255,0.06)', color: '#7A7A8A', fontSize: 11, fontWeight: 600 }}>
+                <span style={{ padding: '4px 10px', borderRadius: 6, background: '#EFF2F0', color: '#5A635F', fontSize: 11, fontWeight: 600 }}>
                   Belum ada subtitle
                 </span>
               )}
             </div>
-            <div style={{ fontSize: 12, color: '#7A7A8A', marginTop: 4 }}>
+            <div style={{ fontSize: 12, color: '#5A635F', marginTop: 4 }}>
               Analisis momen viral AI mengandalkan transkrip ini. Kamu bisa mengedit langsung teks atau timestamp di bawah.
             </div>
           </div>
@@ -656,18 +661,18 @@ export default function SourceStep() {
                   display: 'flex',
                   alignItems: 'center',
                   gap: 6,
-                  padding: '6px 12px',
-                  borderRadius: 6,
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  background: 'transparent',
-                  color: '#7A7A8A',
+                  padding: '7px 14px',
+                  borderRadius: 8,
+                  border: '1px solid #D3D9D6',
+                  background: '#EFF2F0',
+                  color: '#5A635F',
                   cursor: 'pointer',
-                  fontSize: 11,
+                  fontSize: 12,
                   fontFamily: "'Montserrat', sans-serif",
                   fontWeight: 600,
                 }}
               >
-                <RotateCcw size={12} />
+                <Icon icon="solar:restart-bold-duotone" width={14} height={14} />
                 Reset ke Subtitle YT
               </button>
             )}
@@ -678,18 +683,18 @@ export default function SourceStep() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 6,
-                padding: '6px 12px',
-                borderRadius: 6,
-                border: '1px solid rgba(255,255,255,0.12)',
-                background: 'transparent',
-                color: '#E8E8F0',
+                padding: '7px 14px',
+                borderRadius: 8,
+                border: '1px solid #D3D9D6',
+                background: '#EFF2F0',
+                color: '#111916',
                 cursor: 'pointer',
-                fontSize: 11,
+                fontSize: 12,
                 fontFamily: "'Montserrat', sans-serif",
                 fontWeight: 600,
               }}
             >
-              <Upload size={12} />
+              <Icon icon="solar:upload-track-bold-duotone" width={14} height={14} />
               Upload SRT Pengganti
               <input
                 type="file"
@@ -709,17 +714,18 @@ export default function SourceStep() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 6,
-                padding: '6px 12px',
-                borderRadius: 6,
-                border: '1px solid rgba(255,255,255,0.12)',
-                background: showFindReplace ? 'rgba(198,255,61,0.1)' : 'transparent',
-                color: showFindReplace ? '#C6FF3D' : '#7A7A8A',
+                padding: '7px 14px',
+                borderRadius: 8,
+                border: showFindReplace ? '1px solid #1D634E' : '1px solid #D3D9D6',
+                background: showFindReplace ? 'rgba(29, 99, 78, 0.12)' : '#EFF2F0',
+                color: showFindReplace ? '#1D634E' : '#5A635F',
                 cursor: 'pointer',
-                fontSize: 11,
+                fontSize: 12,
                 fontFamily: "'Montserrat', sans-serif",
                 fontWeight: 600,
               }}
             >
+              <Icon icon="solar:minimalistic-magnifer-bold-duotone" width={14} height={14} />
               Find &amp; Replace
             </button>
           </div>
@@ -731,10 +737,10 @@ export default function SourceStep() {
             style={{
               display: 'flex',
               gap: 10,
-              background: '#17171F',
-              padding: 10,
-              borderRadius: 8,
-              border: '1px solid rgba(255,255,255,0.06)',
+              background: '#EFF2F0',
+              padding: 12,
+              borderRadius: 10,
+              border: '1px solid #D3D9D6',
             }}
           >
             <input
@@ -744,11 +750,11 @@ export default function SourceStep() {
               onChange={(e) => setFindText(e.target.value)}
               style={{
                 flex: 1,
-                background: '#0B0B10',
-                border: '1px solid rgba(255,255,255,0.12)',
-                borderRadius: 6,
-                padding: '6px 10px',
-                color: '#E8E8F0',
+                background: '#F6F4F1',
+                border: '1px solid #D3D9D6',
+                borderRadius: 8,
+                padding: '8px 12px',
+                color: '#111916',
                 fontSize: 12,
               }}
             />
@@ -759,24 +765,24 @@ export default function SourceStep() {
               onChange={(e) => setReplaceText(e.target.value)}
               style={{
                 flex: 1,
-                background: '#0B0B10',
-                border: '1px solid rgba(255,255,255,0.12)',
-                borderRadius: 6,
-                padding: '6px 10px',
-                color: '#E8E8F0',
+                background: '#F6F4F1',
+                border: '1px solid #D3D9D6',
+                borderRadius: 8,
+                padding: '8px 12px',
+                color: '#111916',
                 fontSize: 12,
               }}
             />
             <button
               onClick={handleFindReplace}
               style={{
-                padding: '6px 14px',
-                borderRadius: 6,
+                padding: '8px 18px',
+                borderRadius: 8,
                 border: 'none',
-                background: '#C6FF3D',
-                color: '#0B0B10',
+                background: '#1D634E',
+                color: '#F6F4F1',
                 fontWeight: 700,
-                fontSize: 11,
+                fontSize: 12,
                 cursor: 'pointer',
               }}
             >
@@ -793,11 +799,11 @@ export default function SourceStep() {
           style={{
             width: '100%',
             minHeight: 220,
-            background: '#0B0B10',
-            border: srtProblems.length > 0 ? '1px solid #FF5A36' : '1px solid rgba(255,255,255,0.1)',
-            borderRadius: 8,
+            background: '#EFF2F0',
+            border: srtProblems.length > 0 ? '1px solid #B54329' : '1px solid #D3D9D6',
+            borderRadius: 10,
             padding: 14,
-            color: '#E8E8F0',
+            color: '#111916',
             fontFamily: "'JetBrains Mono', 'Courier New', monospace",
             fontSize: 12,
             lineHeight: 1.6,
@@ -807,21 +813,25 @@ export default function SourceStep() {
         />
 
         {/* Validasi / Indikator Error SRT */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11 }}>
-          <div style={{ color: '#7A7A8A' }}>
-            {validatingSrt ? 'Memeriksa format SRT...' : srtProblems.length === 0 ? (
-              <span style={{ color: '#22C55E', display: 'flex', alignItems: 'center', gap: 4 }}>
-                <CheckCircle2 size={12} /> Format SRT valid ({edit.srt_text ? edit.srt_text.trim().split(/\n\s*\n/).length : 0} blok)
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12 }}>
+          <div style={{ color: '#5A635F' }}>
+            {validatingSrt ? (
+              'Memeriksa format SRT...'
+            ) : srtProblems.length === 0 ? (
+              <span style={{ color: '#1D634E', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Icon icon="solar:check-circle-bold-duotone" width={16} height={16} />
+                Format SRT valid ({edit.srt_text ? edit.srt_text.trim().split(/\n\s*\n/).length : 0} blok)
               </span>
             ) : (
-              <span style={{ color: '#FF5A36', display: 'flex', alignItems: 'center', gap: 4 }}>
-                <AlertCircle size={12} /> Ditemukan {srtProblems.length} masalah di baris SRT
+              <span style={{ color: '#B54329', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Icon icon="solar:danger-circle-bold-duotone" width={16} height={16} />
+                Ditemukan {srtProblems.length} masalah di baris SRT
               </span>
             )}
           </div>
 
           {srtProblems.length > 0 && (
-            <div style={{ color: '#FF5A36', fontSize: 11 }}>
+            <div style={{ color: '#B54329', fontSize: 12 }}>
               Contoh: Blok {srtProblems[0].block} ({srtProblems[0].message})
             </div>
           )}
@@ -831,37 +841,42 @@ export default function SourceStep() {
       {/* Banner & Tombol Utama: Lanjut ke Tahap 2 */}
       <div
         style={{
-          background: isSourceReady ? '#12121A' : 'rgba(255,255,255,0.02)',
-          border: isSourceReady ? '1px solid rgba(198,255,61,0.25)' : '1px solid rgba(255,255,255,0.08)',
-          borderRadius: 12,
+          background: isSourceReady ? '#EFF2F0' : '#F6F4F1',
+          border: isSourceReady ? '1.5px solid #1D634E' : '1px solid #D3D9D6',
+          borderRadius: 16,
           padding: 20,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           flexWrap: 'wrap',
           gap: 16,
+          boxShadow: '0 1px 3px rgba(17,25,22,0.04)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <div
             style={{
-              width: 42,
-              height: 42,
-              borderRadius: 8,
-              background: isSourceReady ? 'rgba(198,255,61,0.15)' : 'rgba(255,255,255,0.05)',
+              width: 44,
+              height: 44,
+              borderRadius: 10,
+              background: isSourceReady ? 'rgba(29, 99, 78, 0.15)' : '#EFF2F0',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: isSourceReady ? '#C6FF3D' : '#7A7A8A',
+              color: isSourceReady ? '#1D634E' : '#5A635F',
             }}
           >
-            {isSourceReady ? <CheckCircle2 size={22} /> : <FileText size={22} />}
+            <Icon
+              icon={isSourceReady ? 'solar:check-circle-bold-duotone' : 'solar:document-text-bold-duotone'}
+              width={24}
+              height={24}
+            />
           </div>
           <div>
-            <div style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 700, fontSize: 14, color: isSourceReady ? '#E8E8F0' : '#7A7A8A' }}>
+            <div style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 700, fontSize: 14, color: isSourceReady ? '#111916' : '#5A635F' }}>
               {isSourceReady ? 'Sumber & Subtitle Siap Dianalisis AI' : 'Menunggu Link YouTube atau File SRT'}
             </div>
-            <div style={{ fontSize: 12, color: '#7A7A8A', marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: '#5A635F', marginTop: 2 }}>
               {isSourceReady
                 ? (youtubeInfo ? `Video YouTube: "${youtubeInfo.title}" (${formatSeconds(youtubeInfo.duration)})` : `File video lokal: ${edit.video_filename}`)
                 : 'Silakan ambil subtitle dari YouTube atau upload file SRT di atas untuk lanjut ke Tahap 2.'}
@@ -877,21 +892,22 @@ export default function SourceStep() {
             alignItems: 'center',
             gap: 10,
             padding: '12px 28px',
-            borderRadius: 8,
+            borderRadius: 10,
             border: 'none',
             cursor: isSourceReady ? 'pointer' : 'not-allowed',
             fontFamily: "'Montserrat', sans-serif",
             fontWeight: 800,
             fontSize: 13,
-            background: '#C6FF3D',
-            color: '#0B0B10',
+            background: '#1D634E',
+            color: '#F6F4F1',
             letterSpacing: '0.04em',
             opacity: isSourceReady ? 1 : 0.4,
-            boxShadow: isSourceReady ? '0 0 24px rgba(198,255,61,0.3)' : 'none',
+            boxShadow: isSourceReady ? '0 2px 12px rgba(29, 99, 78, 0.3)' : 'none',
+            transition: 'all 0.15s ease',
           }}
         >
           LANJUT KE ANALISIS AI (PILIH KLIP)
-          <ArrowRight size={16} />
+          <Icon icon="solar:arrow-right-bold-duotone" width={18} height={18} />
         </button>
       </div>
     </div>

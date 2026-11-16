@@ -22,7 +22,18 @@ export type LayoutMode = 'fill_crop' | 'blur_bg';
 export type HookMode = 'box' | 'text' | 'clean';
 export type HookAnimation = 'pop_bounce' | 'zoom_slam' | 'fade_slide_up' | 'typewriter_fade' | 'none';
 export type HookLetterStyle = 'uppercase' | 'title' | 'lowercase';
-export type SubtitleAnimation = 'none' | 'pop_in' | 'fade_up' | 'zoom_soft';
+export type SubtitleAnimation =
+  | 'none'
+  | 'word_bounce'
+  | 'karaoke_spotlight'
+  | 'spring_pop'
+  | 'blur_reveal'
+  | 'impact_slam'
+  | 'neon_glow'
+  // legacy aliases for backward compatibility
+  | 'pop_in'
+  | 'fade_up'
+  | 'zoom_soft';
 export type Resolution = 1080 | 720;
 export type SubSource = 'manual' | 'auto' | 'none';
 export type LetterStyle = 'uppercase' | 'title' | 'lowercase';
@@ -76,6 +87,9 @@ export interface EditState {
   sfx_start_sec: number;
   // --- subtitle animation ---
   subtitle_animation: SubtitleAnimation;
+  // --- subtitle sync ---
+  subtitle_offset_sec: number;
+  word_timings: Array<{ word: string; start: number; end: number }>;
   // --- output ---
   resolution: Resolution;
   fps: number | null;
@@ -121,7 +135,9 @@ export const DEFAULT_EDIT_STATE: EditState = {
   sfx_filename: '',
   sfx_volume: 0.85,
   sfx_start_sec: 0,
-  subtitle_animation: 'pop_in',
+  subtitle_animation: 'word_bounce',
+  subtitle_offset_sec: 0,
+  word_timings: [],
   resolution: 1080,
   fps: null,
   crf: 20,

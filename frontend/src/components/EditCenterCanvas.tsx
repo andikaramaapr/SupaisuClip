@@ -1,15 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import {
-  Play,
-  Pause,
-  RotateCcw,
-  Crosshair,
-  Shield,
-  Magnet,
-  ZoomIn,
-  ZoomOut,
-  Maximize2,
-} from 'lucide-react';
+import { Icon } from '@iconify/react';
 import { useStore } from '../store';
 import { fetchYoutubeFrame } from '../api';
 import type { Rect } from '../types';
@@ -72,13 +62,30 @@ function wrapCueTextPreview(text: string, maxLines = 2, maxChars = 26): string {
   return lines.join('\n');
 }
 
+// Helper extract YouTube ID from diverse formats
+function extractYoutubeId(url: string): string | null {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([A-Za-z0-9_-]{11})/,
+    /youtube\.com\/v\/([A-Za-z0-9_-]{11})/,
+  ];
+  for (const p of patterns) {
+    const m = (url || '').match(p);
+    if (m) return m[1];
+  }
+  return null;
+}
+
 export default function EditCenterCanvas() {
-  const { edit, setEdit, videoMeta, videoUrl, previewUrl, youtubeVideoId } = useStore();
-  // YouTube IFrame mode: used when no local video file but YouTube URL is known
-  const isYoutubeMode = !videoUrl && Boolean(youtubeVideoId);
+  const { edit, setEdit, videoMeta, videoUrl, previewUrl, youtubeVideoId, youtubeUrl } = useStore();
+  const effectiveYoutubeId =
+    youtubeVideoId ||
+    extractYoutubeId(edit.youtube_url || youtubeUrl || '');
+  const videoSrc = previewUrl || videoUrl || (edit.video_filename ? `/files/uploads/${edit.video_filename}` : '');
+  // YouTube IFrame mode: used when no local video file but YouTube URL/ID is known
+  const isYoutubeMode = !videoSrc && Boolean(effectiveYoutubeId);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   // For YouTube mode: track currentTime via postMessage polling
-  const ytTimeRef = useRef<number>(0);
+  const ytTimeRef = useRef<number>(edit.clip_start || 0);
   const ytPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -86,7 +93,7 @@ export default function EditCenterCanvas() {
   const webcamCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
+  const [currentTime, setCurrentTime] = useState(edit.clip_start || 0);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
   const [showGrid, setShowGrid] = useState(true);
   const [showSafeMargin, setShowSafeMargin] = useState(true);
@@ -108,8 +115,8 @@ export default function EditCenterCanvas() {
 
   // Ambil frame tengah video untuk framing webcam saat mode YouTube
   useEffect(() => {
-    if (!isYoutubeMode || !youtubeVideoId) return;
-    const url = edit.youtube_url || `https://www.youtube.com/watch?v=${youtubeVideoId}`;
+    if (!isYoutubeMode || !effectiveYoutubeId) return;
+    const url = edit.youtube_url || (youtubeUrl ? youtubeUrl : `https://www.youtube.com/watch?v=${effectiveYoutubeId}`);
     const midPoint = (edit.clip_start + (edit.clip_end ?? (edit.clip_start + 30))) / 2;
     fetchYoutubeFrame(url, midPoint)
       .then((res) => {
@@ -118,9 +125,9 @@ export default function EditCenterCanvas() {
         }
       })
       .catch(() => {
-        setYtFrameUrl(`https://img.youtube.com/vi/${youtubeVideoId}/hqdefault.jpg`);
+        setYtFrameUrl(`https://img.youtube.com/vi/${effectiveYoutubeId}/hqdefault.jpg`);
       });
-  }, [isYoutubeMode, youtubeVideoId, edit.youtube_url, edit.clip_start, edit.clip_end]);
+  }, [isYoutubeMode, effectiveYoutubeId, edit.youtube_url, youtubeUrl, edit.clip_start, edit.clip_end]);
 
   // ResizeObserver untuk menyesuaikan skala transform canvas 1080x1920
   useEffect(() => {
@@ -145,16 +152,26 @@ export default function EditCenterCanvas() {
   const autoFitScale = Math.min(availW / NATIVE_W, availH / NATIVE_H) || 0.32;
   const scale = zoomPreset === 'fit' ? autoFitScale : zoomPreset;
 
-  // Video playback tracking
+  // Video playback tracking (Video Lokal)
   const handleTimeUpdate = () => {
     if (!videoRef.current) return;
     const cur = videoRef.current.currentTime;
     setCurrentTime(cur);
 
-    // Loop dalam rentang klip
+    // Batasi dalam rentang klip (loop / pause saat sampai clip_end)
     const end = edit.clip_end ?? videoMeta?.duration ?? 999999;
     if (cur >= end) {
+      videoRef.current.pause();
+      setIsPlaying(false);
       videoRef.current.currentTime = edit.clip_start;
+      setCurrentTime(edit.clip_start);
+    }
+  };
+
+  const handleVideoLoaded = () => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = edit.clip_start;
+      setCurrentTime(edit.clip_start);
     }
   };
 
@@ -166,12 +183,33 @@ export default function EditCenterCanvas() {
     );
   };
 
-  // Poll YouTube currentTime every 100ms
+  const handleIframeLoad = () => {
+    ytSendCmd('seekTo', [edit.clip_start, true]);
+    iframeRef.current?.contentWindow?.postMessage(
+      JSON.stringify({ event: 'listening' }), '*'
+    );
+  };
+
+  // Otomatis sinkronkan waktu pemutar saat clip_start berubah atau berganti klip
+  useEffect(() => {
+    setCurrentTime(edit.clip_start);
+    ytTimeRef.current = edit.clip_start;
+    if (isYoutubeMode) {
+      ytSendCmd('seekTo', [edit.clip_start, true]);
+    } else if (videoRef.current) {
+      videoRef.current.currentTime = edit.clip_start;
+    }
+  }, [edit.clip_start, isYoutubeMode]);
+
+  // Poll YouTube currentTime every 250ms
   useEffect(() => {
     if (!isYoutubeMode) return;
     const handleMsg = (ev: MessageEvent) => {
       try {
         const data = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data;
+        if (data?.event === 'onReady') {
+          ytSendCmd('seekTo', [edit.clip_start, true]);
+        }
         if (data?.event === 'infoDelivery' && data?.info?.currentTime !== undefined) {
           const cur = data.info.currentTime as number;
           ytTimeRef.current = cur;
@@ -186,12 +224,12 @@ export default function EditCenterCanvas() {
       } catch { /* ignore */ }
     };
     window.addEventListener('message', handleMsg);
-    // Start polling for time info every 300ms
+    // Start polling for time info every 250ms
     ytPollRef.current = setInterval(() => {
       iframeRef.current?.contentWindow?.postMessage(
         JSON.stringify({ event: 'listening' }), '*'
       );
-    }, 300);
+    }, 250);
     return () => {
       window.removeEventListener('message', handleMsg);
       if (ytPollRef.current) clearInterval(ytPollRef.current);
@@ -229,7 +267,9 @@ export default function EditCenterCanvas() {
   // Subtitle aktif
   const srtEntries = parseSrtForPreview(edit.srt_text);
   const relTime = edit.srt_relative ? currentTime - edit.clip_start : currentTime;
-  const rawSub = srtEntries.find((e) => relTime >= e.start && relTime <= e.end);
+  // Apply subtitle_offset_sec: geser waktu pencarian subtitle (+ = subtitle tampil lebih lambat)
+  const adjustedRelTime = Math.max(0, relTime - (edit.subtitle_offset_sec ?? 0));
+  const rawSub = srtEntries.find((e) => adjustedRelTime >= e.start && adjustedRelTime <= e.end);
 
   // Apply letter_style transform for live preview
   const applyLetterStyle = (text: string) => {
@@ -240,6 +280,143 @@ export default function EditCenterCanvas() {
     return text.replace(/\b\w/g, (c) => c.toUpperCase());
   };
   const activeSub = rawSub ? { ...rawSub, text: wrapCueTextPreview(applyLetterStyle(rawSub.text)) } : undefined;
+
+  // Kinetic Word-by-Word Live Preview Renderer
+  const renderKineticPreview = () => {
+    if (!activeSub) return null;
+
+    const anim = edit.subtitle_animation ?? 'word_bounce';
+    const baseColor = edit.primary_color || (edit.style_key === 'hormozi_pop' ? '#FFFF00' : '#FFFFFF');
+    const highlightColor = edit.highlight_color || '#FF3B3B';
+    const hlWords = (edit.highlight_words || []).map((w) => w.trim().toLowerCase()).filter(Boolean);
+
+    if (anim === 'none') {
+      return activeSub.text;
+    }
+
+    const lines = activeSub.text.split('\n');
+    const allWords = lines.flatMap((l) => l.split(/\s+/).filter(Boolean));
+    const numWords = allWords.length;
+    if (numWords === 0) return activeSub.text;
+
+    const cueDur = Math.max(0.2, activeSub.end - activeSub.start);
+    const elapsed = Math.max(0, adjustedRelTime - activeSub.start);
+    const totalChars = allWords.reduce((sum, w) => sum + w.length, 0) || 1;
+    const minWordSec = 0.08;
+
+    let wordDurs: number[];
+    if (cueDur <= numWords * minWordSec) {
+      wordDurs = Array(numWords).fill(cueDur / numWords);
+    } else {
+      const rem = cueDur - numWords * minWordSec;
+      wordDurs = allWords.map((w) => minWordSec + rem * (w.length / totalChars));
+    }
+
+    let curT = 0;
+    const wordTimings = wordDurs.map((d) => {
+      const s = curT;
+      const e = curT + d;
+      curT += d;
+      return { s, e };
+    });
+
+    let wordIdx = 0;
+    return (
+      <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+        {lines.map((line, lIdx) => {
+          const wordsInLine = line.split(/\s+/).filter(Boolean);
+          return (
+            <div key={lIdx} style={{ display: 'inline-flex', flexWrap: 'wrap', justifyContent: 'center', gap: '0.28em' }}>
+              {wordsInLine.map((w, wInLineIdx) => {
+                const timing = wordTimings[wordIdx] || { s: 0, e: cueDur };
+                wordIdx++;
+
+                const isCurrent = elapsed >= timing.s && elapsed < timing.e;
+                const isUpcoming = elapsed < timing.s;
+                const cleanWord = w.replace(/[^\w]/g, '').toLowerCase();
+                const isKeyword = hlWords.some((hw) => cleanWord.includes(hw));
+
+                let wColor = isKeyword ? highlightColor : baseColor;
+                let wTransform = 'scale(1)';
+                let wOpacity = 1;
+                let wFilter = 'none';
+                let wShadow = 'none';
+
+                if (anim === 'word_bounce' || anim === 'zoom_soft') {
+                  if (isCurrent) {
+                    wColor = highlightColor;
+                    wTransform = 'scale(1.28)';
+                    wShadow = `0 0 16px ${highlightColor}`;
+                  }
+                } else if (anim === 'karaoke_spotlight') {
+                  if (isUpcoming) {
+                    wOpacity = 0.35;
+                  } else if (isCurrent) {
+                    wColor = highlightColor;
+                    wTransform = 'scale(1.08)';
+                    wOpacity = 1;
+                  } else {
+                    wOpacity = 1;
+                  }
+                } else if (anim === 'spring_pop' || anim === 'pop_in') {
+                  if (isUpcoming) {
+                    wOpacity = 0;
+                    wTransform = 'scale(0)';
+                  } else if (isCurrent) {
+                    wColor = highlightColor;
+                    wTransform = 'scale(1.15)';
+                    wOpacity = 1;
+                  }
+                } else if (anim === 'blur_reveal' || anim === 'fade_up') {
+                  if (isUpcoming) {
+                    wOpacity = 0;
+                    wFilter = 'blur(10px)';
+                    wTransform = 'scale(1.08)';
+                  } else if (isCurrent) {
+                    wColor = highlightColor;
+                    wFilter = 'blur(0)';
+                    wTransform = 'scale(1.0)';
+                  }
+                } else if (anim === 'impact_slam') {
+                  if (isUpcoming) {
+                    wOpacity = 0;
+                    wTransform = 'scale(1.6)';
+                  } else if (isCurrent) {
+                    wColor = highlightColor;
+                    wTransform = 'scale(1.0)';
+                  }
+                } else if (anim === 'neon_glow') {
+                  if (isCurrent) {
+                    wColor = highlightColor;
+                    wTransform = 'scale(1.06)';
+                    wShadow = `0 0 18px ${highlightColor}, 0 0 32px ${highlightColor}`;
+                  }
+                }
+
+                return (
+                  <span
+                    key={`${lIdx}_${wInLineIdx}_${w}`}
+                    style={{
+                      display: 'inline-block',
+                      color: wColor,
+                      transform: wTransform,
+                      opacity: wOpacity,
+                      filter: wFilter,
+                      textShadow: wShadow !== 'none' ? wShadow : undefined,
+                      transition: 'transform 0.09s ease-out, opacity 0.08s ease-out, filter 0.1s ease-out, color 0.08s',
+                      transformOrigin: 'center bottom',
+                    }}
+                  >
+                    {w}
+                  </span>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   // Apply hook_letter_style transform for live preview
   const applyHookLetterStyle = (text: string) => {
@@ -507,7 +684,7 @@ export default function EditCenterCanvas() {
     <div
       style={{
         flex: 1,
-        background: '#0B0B10',
+        background: '#EFF2F0',
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
@@ -521,8 +698,8 @@ export default function EditCenterCanvas() {
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '8px 18px',
-          background: '#12121A',
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          background: '#F6F4F1',
+          borderBottom: '1px solid #D3D9D6',
           gap: 12,
           flexWrap: 'wrap',
         }}
@@ -537,11 +714,11 @@ export default function EditCenterCanvas() {
               display: 'flex',
               alignItems: 'center',
               gap: 5,
-              padding: '4px 9px',
+              padding: '5px 10px',
               borderRadius: 6,
-              border: '1px solid ' + (showGrid ? 'rgba(198,255,61,0.4)' : 'rgba(255,255,255,0.1)'),
-              background: showGrid ? 'rgba(198,255,61,0.12)' : 'transparent',
-              color: showGrid ? '#C6FF3D' : '#7A7A8A',
+              border: '1px solid ' + (showGrid ? '#1D634E' : '#D3D9D6'),
+              background: showGrid ? 'rgba(29, 99, 78, 0.12)' : '#EFF2F0',
+              color: showGrid ? '#1D634E' : '#5A635F',
               fontSize: 11,
               fontFamily: "'Montserrat', sans-serif",
               fontWeight: 700,
@@ -549,7 +726,7 @@ export default function EditCenterCanvas() {
               transition: 'all 0.15s ease',
             }}
           >
-            <Crosshair size={13} />
+            <Icon icon="solar:crosshair-bold-duotone" width={14} height={14} />
             Grid +
           </button>
 
@@ -561,11 +738,11 @@ export default function EditCenterCanvas() {
               display: 'flex',
               alignItems: 'center',
               gap: 5,
-              padding: '4px 9px',
+              padding: '5px 10px',
               borderRadius: 6,
-              border: '1px solid ' + (showSafeMargin ? 'rgba(251,191,36,0.4)' : 'rgba(255,255,255,0.1)'),
-              background: showSafeMargin ? 'rgba(251,191,36,0.12)' : 'transparent',
-              color: showSafeMargin ? '#FBBF24' : '#7A7A8A',
+              border: '1px solid ' + (showSafeMargin ? '#1D634E' : '#D3D9D6'),
+              background: showSafeMargin ? 'rgba(29, 99, 78, 0.12)' : '#EFF2F0',
+              color: showSafeMargin ? '#1D634E' : '#5A635F',
               fontSize: 11,
               fontFamily: "'Montserrat', sans-serif",
               fontWeight: 700,
@@ -573,7 +750,7 @@ export default function EditCenterCanvas() {
               transition: 'all 0.15s ease',
             }}
           >
-            <Shield size={13} />
+            <Icon icon="solar:shield-check-bold-duotone" width={14} height={14} />
             Safe Margin
           </button>
 
@@ -585,11 +762,11 @@ export default function EditCenterCanvas() {
               display: 'flex',
               alignItems: 'center',
               gap: 5,
-              padding: '4px 9px',
+              padding: '5px 10px',
               borderRadius: 6,
-              border: '1px solid ' + (snapEnabled ? '#C6FF3D' : 'rgba(255,255,255,0.1)'),
-              background: snapEnabled ? 'rgba(198,255,61,0.15)' : 'transparent',
-              color: snapEnabled ? '#C6FF3D' : '#7A7A8A',
+              border: '1px solid ' + (snapEnabled ? '#1D634E' : '#D3D9D6'),
+              background: snapEnabled ? 'rgba(29, 99, 78, 0.12)' : '#EFF2F0',
+              color: snapEnabled ? '#1D634E' : '#5A635F',
               fontSize: 11,
               fontFamily: "'Montserrat', sans-serif",
               fontWeight: 700,
@@ -597,26 +774,26 @@ export default function EditCenterCanvas() {
               transition: 'all 0.15s ease',
             }}
           >
-            <Magnet size={13} />
+            <Icon icon="solar:magnet-bold-duotone" width={14} height={14} />
             Snap
           </button>
 
-          <span style={{ fontSize: 11, color: '#7A7A8A', fontFamily: "'JetBrains Mono', monospace", marginLeft: 4 }}>
+          <span style={{ fontSize: 11, color: '#5A635F', fontFamily: "'JetBrains Mono', monospace", marginLeft: 4 }}>
             1080x1920 (9:16)
           </span>
         </div>
 
         {/* Sisi Kanan: Preset Zoom Buttons & Controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{ display: 'flex', background: '#0B0B10', padding: 2, borderRadius: 6, border: '1px solid rgba(255,255,255,0.08)' }}>
+          <div style={{ display: 'flex', background: '#EFF2F0', padding: 2, borderRadius: 6, border: '1px solid #D3D9D6' }}>
             <button
               onClick={() => setZoomPreset('fit')}
               style={{
                 padding: '4px 8px',
                 borderRadius: 4,
                 border: 'none',
-                background: zoomPreset === 'fit' ? '#C6FF3D' : 'transparent',
-                color: zoomPreset === 'fit' ? '#0B0B10' : '#8A8A9E',
+                background: zoomPreset === 'fit' ? '#1D634E' : 'transparent',
+                color: zoomPreset === 'fit' ? '#F6F4F1' : '#5A635F',
                 fontSize: 11,
                 fontWeight: 700,
                 cursor: 'pointer',
@@ -625,7 +802,7 @@ export default function EditCenterCanvas() {
                 gap: 4,
               }}
             >
-              <Maximize2 size={12} />
+              <Icon icon="solar:maximize-square-bold-duotone" width={12} height={12} />
               Fit
             </button>
             {[0.5, 0.75, 1.0, 1.25].map((z) => {
@@ -638,8 +815,8 @@ export default function EditCenterCanvas() {
                     padding: '4px 8px',
                     borderRadius: 4,
                     border: 'none',
-                    background: isSelected ? '#C6FF3D' : 'transparent',
-                    color: isSelected ? '#0B0B10' : '#8A8A9E',
+                    background: isSelected ? '#1D634E' : 'transparent',
+                    color: isSelected ? '#F6F4F1' : '#5A635F',
                     fontSize: 11,
                     fontWeight: 700,
                     cursor: 'pointer',
@@ -652,18 +829,18 @@ export default function EditCenterCanvas() {
           </div>
 
           {/* Tombol - dan + */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 2, background: '#0B0B10', padding: 2, borderRadius: 6, border: '1px solid rgba(255,255,255,0.08)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 2, background: '#EFF2F0', padding: 2, borderRadius: 6, border: '1px solid #D3D9D6' }}>
             <button
               onClick={() => {
                 const cur = typeof zoomPreset === 'number' ? zoomPreset : scale;
                 setZoomPreset(Math.max(0.25, parseFloat((cur - 0.1).toFixed(2))));
               }}
               title="Zoom Out (-)"
-              style={{ padding: '4px 6px', borderRadius: 4, border: 'none', background: 'transparent', color: '#E8E8F0', cursor: 'pointer' }}
+              style={{ padding: '4px 6px', borderRadius: 4, border: 'none', background: 'transparent', color: '#111916', cursor: 'pointer' }}
             >
-              <ZoomOut size={13} />
+              <Icon icon="solar:magnifer-zoom-out-bold-duotone" width={14} height={14} />
             </button>
-            <span style={{ fontSize: 10, fontFamily: "'JetBrains Mono', monospace", color: '#C6FF3D', minWidth: 36, textAlign: 'center' }}>
+            <span style={{ fontSize: 10, fontFamily: "'JetBrains Mono', monospace", color: '#1D634E', minWidth: 36, textAlign: 'center', fontWeight: 700 }}>
               {Math.round(scale * 100)}%
             </span>
             <button
@@ -672,9 +849,9 @@ export default function EditCenterCanvas() {
                 setZoomPreset(Math.min(2.0, parseFloat((cur + 0.1).toFixed(2))));
               }}
               title="Zoom In (+)"
-              style={{ padding: '4px 6px', borderRadius: 4, border: 'none', background: 'transparent', color: '#E8E8F0', cursor: 'pointer' }}
+              style={{ padding: '4px 6px', borderRadius: 4, border: 'none', background: 'transparent', color: '#111916', cursor: 'pointer' }}
             >
-              <ZoomIn size={13} />
+              <Icon icon="solar:magnifer-zoom-in-bold-duotone" width={14} height={14} />
             </button>
           </div>
         </div>
@@ -690,7 +867,7 @@ export default function EditCenterCanvas() {
           alignItems: 'center',
           justifyContent: 'center',
           overflow: 'auto',
-          background: '#07070A',
+          background: '#EFF2F0',
           padding: 24,
         }}
       >
@@ -710,25 +887,61 @@ export default function EditCenterCanvas() {
           }}
         >
           {/* Layer 0: Background Video OR YouTube IFrame */}
-          <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', zIndex: 1, background: '#000000' }}>
             {isYoutubeMode ? (
               /* YouTube IFrame Player – controlled via postMessage YT API */
-              <iframe
-                ref={iframeRef}
-                src={`https://www.youtube.com/embed/${youtubeVideoId}?enablejsapi=1&controls=0&modestbranding=1&rel=0&playsinline=1&start=${Math.floor(edit.clip_start)}&autoplay=0`}
-                allow="autoplay; encrypted-media"
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  border: 'none',
-                  objectFit: 'cover',
-                }}
-                title="YouTube Preview"
-              />
+              <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+                {edit.layout_mode === 'blur_bg' && (
+                  <iframe
+                    src={`https://www.youtube.com/embed/${effectiveYoutubeId}?enablejsapi=0&controls=0&modestbranding=1&rel=0&playsinline=1&start=${Math.floor(edit.clip_start)}&autoplay=0&mute=1`}
+                    style={{
+                      position: 'absolute',
+                      left: '50%',
+                      top: '50%',
+                      width: '316.05%',
+                      height: '100%',
+                      transform: 'translate(-50%, -50%) scale(1.15)',
+                      filter: 'blur(28px) brightness(0.45)',
+                      border: 'none',
+                      pointerEvents: 'none',
+                    }}
+                    tabIndex={-1}
+                    title="YouTube Blur Background"
+                  />
+                )}
+                <iframe
+                  ref={iframeRef}
+                  onLoad={handleIframeLoad}
+                  src={`https://www.youtube.com/embed/${effectiveYoutubeId}?enablejsapi=1&controls=0&modestbranding=1&rel=0&playsinline=1&start=${Math.floor(edit.clip_start)}&autoplay=0`}
+                  allow="autoplay; encrypted-media"
+                  style={{
+                    position: 'absolute',
+                    border: 'none',
+                    pointerEvents: 'none',
+                    ...(edit.layout_mode === 'blur_bg'
+                      ? {
+                          left: 0,
+                          top: '50%',
+                          width: '100%',
+                          height: 607.5,
+                          transform: 'translateY(-50%)',
+                        }
+                      : {
+                          left: '50%',
+                          top: '50%',
+                          width: '316.05%',
+                          height: '100%',
+                          transform: `translate(-50%, -50%) scale(${edit.main_zoom}) translate(${(0.5 - edit.main_x_offset) * 30}%, ${(0.5 - edit.main_y_offset) * 30}%)`,
+                        }),
+                  }}
+                  title="YouTube Preview"
+                />
+              </div>
             ) : (
               <video
                 ref={videoRef}
-                src={previewUrl || videoUrl || ''}
+                src={videoSrc}
+                onLoadedMetadata={handleVideoLoaded}
                 onTimeUpdate={handleTimeUpdate}
                 playsInline
                 style={{
@@ -744,7 +957,7 @@ export default function EditCenterCanvas() {
             )}
           </div>
 
-          {/* Layer 1: Subtitle Preview */}
+          {/* Layer 1: Subtitle Preview (Kinetic Word-by-Word Animation) */}
           {activeSub && (
             <div
               key={`${activeSub.start}_${activeSub.text}`}
@@ -764,17 +977,9 @@ export default function EditCenterCanvas() {
                 pointerEvents: 'none',
                 zIndex: 10,
                 whiteSpace: 'pre-wrap',
-                animation:
-                  edit.subtitle_animation === 'pop_in'
-                    ? 'subPopIn 0.15s ease-out forwards'
-                    : edit.subtitle_animation === 'fade_up'
-                    ? 'subFadeUp 0.18s ease-out forwards'
-                    : edit.subtitle_animation === 'zoom_soft'
-                    ? 'subZoomSoft 0.16s ease-out forwards'
-                    : 'none',
               }}
             >
-              {activeSub.text}
+              {renderKineticPreview()}
             </div>
           )}
 
@@ -884,7 +1089,7 @@ export default function EditCenterCanvas() {
               {isYoutubeMode ? (
                 <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#12121A' }}>
                   <img
-                    src={ytFrameUrl || `https://img.youtube.com/vi/${youtubeVideoId}/hqdefault.jpg`}
+                    src={ytFrameUrl || `https://img.youtube.com/vi/${effectiveYoutubeId}/hqdefault.jpg`}
                     alt="Webcam Preview"
                     style={{
                       position: 'absolute',
@@ -1119,8 +1324,8 @@ export default function EditCenterCanvas() {
       {/* Kontrol Player Bawah: Play/Pause, Scrubber Waktu Klip */}
       <div
         style={{
-          background: '#12121A',
-          borderTop: '1px solid rgba(255,255,255,0.08)',
+          background: '#F6F4F1',
+          borderTop: '1px solid #D3D9D6',
           padding: '10px 24px',
           display: 'flex',
           alignItems: 'center',
@@ -1133,20 +1338,23 @@ export default function EditCenterCanvas() {
             width: 38,
             height: 38,
             borderRadius: '50%',
-            background: '#C6FF3D',
-            color: '#0B0B10',
+            background: '#1D634E',
+            color: '#F6F4F1',
             border: 'none',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             cursor: 'pointer',
+            boxShadow: '0 2px 6px rgba(29, 99, 78, 0.3)',
           }}
         >
-          {isPlaying ? <Pause size={18} /> : <Play size={18} style={{ marginLeft: 2 }} />}
+          <Icon icon={isPlaying ? 'solar:pause-bold-duotone' : 'solar:play-bold-duotone'} width={18} height={18} />
         </button>
 
         <button
           onClick={() => {
+            setCurrentTime(edit.clip_start);
+            ytTimeRef.current = edit.clip_start;
             if (isYoutubeMode) {
               ytSendCmd('seekTo', [edit.clip_start, true]);
             } else if (videoRef.current) {
@@ -1158,21 +1366,21 @@ export default function EditCenterCanvas() {
             width: 32,
             height: 32,
             borderRadius: 6,
-            background: 'transparent',
-            color: '#7A7A8A',
-            border: '1px solid rgba(255,255,255,0.1)',
+            background: '#EFF2F0',
+            color: '#111916',
+            border: '1px solid #D3D9D6',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             cursor: 'pointer',
           }}
         >
-          <RotateCcw size={14} />
+          <Icon icon="solar:restart-bold-duotone" width={14} height={14} />
         </button>
 
         {/* Scrubber Relatif Klip */}
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 11, color: '#7A7A8A', fontFamily: "'JetBrains Mono', monospace" }}>
+          <span style={{ fontSize: 11, color: '#5A635F', fontFamily: "'JetBrains Mono', monospace" }}>
             {Math.max(0, currentTime - edit.clip_start).toFixed(1)}s
           </span>
           <input
@@ -1184,6 +1392,7 @@ export default function EditCenterCanvas() {
             onChange={(e) => {
               const val = parseFloat(e.target.value);
               setCurrentTime(val);
+              ytTimeRef.current = val;
               if (isYoutubeMode) {
                 ytSendCmd('seekTo', [val, true]);
               } else if (videoRef.current) {
@@ -1192,7 +1401,7 @@ export default function EditCenterCanvas() {
             }}
             style={{ flex: 1 }}
           />
-          <span style={{ fontSize: 11, color: '#E8E8F0', fontFamily: "'JetBrains Mono', monospace" }}>
+          <span style={{ fontSize: 11, color: '#111916', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>
             {((edit.clip_end ?? videoMeta?.duration ?? 60) - edit.clip_start).toFixed(1)}s
           </span>
         </div>

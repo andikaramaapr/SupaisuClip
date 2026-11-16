@@ -1,27 +1,26 @@
 import { useState, useEffect, useRef } from 'react';
-import {
-  Sparkles,
-  Play,
-  Pause,
-  AlertTriangle,
-  ArrowRight,
-  Plus,
-  Scissors,
-  CheckSquare,
-  Square,
-  Clock,
-  Flame,
-  Info,
-  CheckCircle2,
-  Film,
-} from 'lucide-react';
+import { Icon } from '@iconify/react';
 import { useStore } from '../store';
 import { analyzeClips } from '../api';
 import type { ClipSegment } from '../types';
 
+// Helper extract YouTube ID from diverse formats
+function extractYoutubeId(url: string): string | null {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([A-Za-z0-9_-]{11})/,
+    /youtube\.com\/v\/([A-Za-z0-9_-]{11})/,
+  ];
+  for (const p of patterns) {
+    const m = (url || '').match(p);
+    if (m) return m[1];
+  }
+  return null;
+}
+
 export default function AnalyzeStep() {
   const {
     youtubeUrl,
+    youtubeVideoId,
     edit,
     setEdit,
     videoMeta,
@@ -38,14 +37,25 @@ export default function AnalyzeStep() {
     setStep,
   } = useStore();
 
+  const effectiveYoutubeId = youtubeVideoId || extractYoutubeId(youtubeUrl || edit.youtube_url || '');
+  const videoSrc = previewUrl || videoUrl || (edit.video_filename ? `/files/uploads/${edit.video_filename}` : '');
+  const isYoutube = !videoSrc && Boolean(effectiveYoutubeId);
+
+  const selectedClip = clips.find((c) => (c.id || `clip_${c.start}_${c.end}`) === activeClipId) || clips[0] || null;
+  const clipStart = selectedClip ? selectedClip.start : edit.clip_start;
+  const clipEnd = selectedClip ? selectedClip.end : (edit.clip_end ?? (videoMeta?.duration || 300));
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [analyzedSrtSnapshot, setAnalyzedSrtSnapshot] = useState('');
 
   // Video preview player state
   const videoRef = useRef<HTMLVideoElement>(null);
+  const ytIframeRef = useRef<HTMLIFrameElement>(null);
+  const ytPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
+  const [currentTime, setCurrentTime] = useState(clipStart || 0);
 
   // Manual clip adjustment fields
   const [manualStart, setManualStart] = useState<number>(edit.clip_start);
@@ -57,29 +67,91 @@ export default function AnalyzeStep() {
     setManualEnd(edit.clip_end ?? (videoMeta?.duration ? Math.min(videoMeta.duration, edit.clip_start + 60) : 60));
   }, [edit.clip_start, edit.clip_end, videoMeta?.duration]);
 
-  // Video time tracking
+  const ytSendCmd = (func: string, args?: unknown[]) => {
+    ytIframeRef.current?.contentWindow?.postMessage(
+      JSON.stringify({ event: 'command', func, args: args || [] }),
+      '*'
+    );
+  };
+
+  // Poll YouTube currentTime & auto pause at clipEnd
+  useEffect(() => {
+    if (!isYoutube) return;
+    const handleMsg = (ev: MessageEvent) => {
+      try {
+        const data = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data;
+        if (data?.event === 'onReady') {
+          ytSendCmd('seekTo', [clipStart, true]);
+        }
+        if (data?.event === 'infoDelivery' && data?.info?.currentTime !== undefined) {
+          const cur = data.info.currentTime as number;
+          setCurrentTime(cur);
+          if (cur >= clipEnd) {
+            ytSendCmd('pauseVideo');
+            setIsPlaying(false);
+            ytSendCmd('seekTo', [clipStart, true]);
+          }
+        }
+      } catch { /* ignore */ }
+    };
+    window.addEventListener('message', handleMsg);
+    ytPollRef.current = setInterval(() => {
+      ytIframeRef.current?.contentWindow?.postMessage(
+        JSON.stringify({ event: 'listening' }), '*'
+      );
+    }, 250);
+    return () => {
+      window.removeEventListener('message', handleMsg);
+      if (ytPollRef.current) clearInterval(ytPollRef.current);
+    };
+  }, [isYoutube, clipStart, clipEnd]);
+
+  // Auto seek saat clipStart berubah
+  useEffect(() => {
+    setCurrentTime(clipStart);
+    if (videoSrc && videoRef.current) {
+      videoRef.current.currentTime = clipStart;
+    } else if (isYoutube) {
+      ytSendCmd('seekTo', [clipStart, true]);
+    }
+  }, [clipStart, videoSrc, isYoutube]);
+
+  // Video time tracking (Video Lokal)
   const handleTimeUpdate = () => {
     if (!videoRef.current) return;
     const cur = videoRef.current.currentTime;
     setCurrentTime(cur);
 
-    // Stop playback if reaches clip_end
-    const end = edit.clip_end ?? videoMeta?.duration ?? 999999;
-    if (cur >= end) {
+    // Stop playback if reaches clipEnd
+    if (cur >= clipEnd) {
       videoRef.current.pause();
       setIsPlaying(false);
-      videoRef.current.currentTime = edit.clip_start;
+      videoRef.current.currentTime = clipStart;
+      setCurrentTime(clipStart);
     }
   };
 
   const togglePlay = () => {
+    if (isYoutube) {
+      if (isPlaying) {
+        ytSendCmd('pauseVideo');
+        setIsPlaying(false);
+      } else {
+        if (currentTime < clipStart || currentTime >= clipEnd) {
+          ytSendCmd('seekTo', [clipStart, true]);
+        }
+        ytSendCmd('playVideo');
+        setIsPlaying(true);
+      }
+      return;
+    }
     if (!videoRef.current) return;
     if (isPlaying) {
       videoRef.current.pause();
       setIsPlaying(false);
     } else {
-      if (videoRef.current.currentTime < edit.clip_start || videoRef.current.currentTime >= (edit.clip_end ?? 9999)) {
-        videoRef.current.currentTime = edit.clip_start;
+      if (videoRef.current.currentTime < clipStart || videoRef.current.currentTime >= clipEnd) {
+        videoRef.current.currentTime = clipStart;
       }
       videoRef.current.play();
       setIsPlaying(true);
@@ -94,9 +166,14 @@ export default function AnalyzeStep() {
       clip_end: c.end,
       hook_text: c.suggested_hooks?.[0] || edit.hook_text,
     });
-    if (videoRef.current) {
+    setCurrentTime(c.start);
+    if (videoSrc && videoRef.current) {
       videoRef.current.currentTime = c.start;
       videoRef.current.play();
+      setIsPlaying(true);
+    } else if (isYoutube) {
+      ytSendCmd('seekTo', [c.start, true]);
+      ytSendCmd('playVideo');
       setIsPlaying(true);
     }
   };
@@ -109,6 +186,12 @@ export default function AnalyzeStep() {
       clip_end: c.end,
       hook_text: c.suggested_hooks?.[0] || edit.hook_text,
     });
+    setCurrentTime(c.start);
+    if (videoSrc && videoRef.current) {
+      videoRef.current.currentTime = c.start;
+    } else if (isYoutube) {
+      ytSendCmd('seekTo', [c.start, true]);
+    }
   };
 
   // Handler: Jalankan Analisis AI
@@ -196,32 +279,33 @@ export default function AnalyzeStep() {
   const totalDuration = videoMeta?.duration || 300;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1100, margin: '0 auto', width: '100%' }}>
       {/* Banner Analisis & Info Model */}
       <div
         style={{
-          background: '#12121A',
-          border: '1px solid rgba(255,255,255,0.08)',
-          borderRadius: 12,
+          background: '#F6F4F1',
+          border: '1px solid #D3D9D6',
+          borderRadius: 16,
           padding: 24,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           flexWrap: 'wrap',
           gap: 20,
+          boxShadow: '0 1px 3px rgba(17,25,22,0.04)',
         }}
       >
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
-            <span style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 800, fontSize: 16, color: '#E8E8F0' }}>
+            <span style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 800, fontSize: 16, color: '#111916' }}>
               Analisis Potensi Klip Viral dengan Gemini AI
             </span>
-            <span style={{ padding: '3px 8px', borderRadius: 4, background: 'rgba(198,255,61,0.15)', color: '#C6FF3D', fontSize: 11, fontWeight: 700 }}>
+            <span style={{ padding: '4px 10px', borderRadius: 6, background: 'rgba(29, 99, 78, 0.12)', color: '#1D634E', fontSize: 11, fontWeight: 700 }}>
               Target Durasi Ideal: 30–65 detik
             </span>
           </div>
-          <div style={{ fontSize: 12, color: '#7A7A8A', display: 'flex', alignItems: 'center', gap: 6, lineHeight: 1.5 }}>
-            <Info size={14} style={{ flexShrink: 0 }} />
+          <div style={{ fontSize: 13, color: '#5A635F', display: 'flex', alignItems: 'center', gap: 6, lineHeight: 1.5 }}>
+            <Icon icon="solar:info-circle-bold-duotone" width={16} height={16} style={{ flexShrink: 0, color: '#1D634E' }} />
             AI menganalisis struktur kalimat transkrip SRT untuk menemukan gagasan utuh, punchline, dan hook terbaik tanpa menunggu download video.
           </div>
         </div>
@@ -233,21 +317,26 @@ export default function AnalyzeStep() {
             display: 'flex',
             alignItems: 'center',
             gap: 8,
-            padding: '12px 24px',
-            borderRadius: 8,
+            padding: '12px 26px',
+            borderRadius: 10,
             border: 'none',
             cursor: loading ? 'not-allowed' : 'pointer',
             fontFamily: "'Montserrat', sans-serif",
             fontWeight: 800,
             fontSize: 13,
-            background: '#C6FF3D',
-            color: '#0B0B10',
+            background: '#1D634E',
+            color: '#F6F4F1',
             letterSpacing: '0.04em',
-            boxShadow: '0 0 20px rgba(198,255,61,0.25)',
+            boxShadow: '0 2px 10px rgba(29, 99, 78, 0.25)',
             whiteSpace: 'nowrap',
+            transition: 'all 0.15s ease',
           }}
         >
-          <Sparkles size={16} />
+          {loading ? (
+            <Icon icon="solar:refresh-circle-bold-duotone" width={18} height={18} className="animate-spin" />
+          ) : (
+            <Icon icon="solar:magic-stick-3-bold-duotone" width={18} height={18} />
+          )}
           {loading ? 'MENGANALISIS TRANSKRIP...' : clips.length > 0 ? 'ANALISIS ULANG' : 'ANALISIS POTENSI KLIP'}
         </button>
       </div>
@@ -259,23 +348,23 @@ export default function AnalyzeStep() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            background: 'rgba(255,170,0,0.1)',
-            border: '1px solid rgba(255,170,0,0.3)',
-            borderRadius: 8,
+            background: 'rgba(202, 138, 4, 0.1)',
+            border: '1px solid rgba(202, 138, 4, 0.3)',
+            borderRadius: 10,
             padding: '12px 18px',
-            color: '#FFAA00',
+            color: '#CA8A04',
             fontSize: 12,
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <AlertTriangle size={16} />
+            <Icon icon="solar:danger-triangle-bold-duotone" width={18} height={18} />
             <span>Transkrip SRT telah diedit sejak analisis terakhir. Rekomendasi klip mungkin sudah basi.</span>
           </div>
           <button
             onClick={handleAnalyze}
             style={{
-              background: '#FFAA00',
-              color: '#0B0B10',
+              background: '#CA8A04',
+              color: '#F6F4F1',
               border: 'none',
               borderRadius: 6,
               padding: '6px 14px',
@@ -291,7 +380,7 @@ export default function AnalyzeStep() {
       )}
 
       {error && (
-        <div style={{ background: 'rgba(255,90,54,0.1)', border: '1px solid #FF5A36', borderRadius: 8, padding: 12, color: '#FF5A36', fontSize: 12 }}>
+        <div style={{ background: 'rgba(181, 67, 41, 0.08)', border: '1px solid #B54329', borderRadius: 10, padding: 14, color: '#B54329', fontSize: 13 }}>
           {error}
         </div>
       )}
@@ -301,29 +390,36 @@ export default function AnalyzeStep() {
         {/* Kolom Kiri: Player Preview Segmen & Timeline Pengatur Start/End */}
         <div
           style={{
-            background: '#12121A',
-            border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: 12,
+            background: '#F6F4F1',
+            border: '1px solid #D3D9D6',
+            borderRadius: 16,
             padding: 20,
             display: 'flex',
             flexDirection: 'column',
             gap: 16,
+            boxShadow: '0 1px 3px rgba(17,25,22,0.04)',
           }}
         >
-          <div style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 700, fontSize: 14, color: '#E8E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 700, fontSize: 14, color: '#111916', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span>Preview Rentang Klip</span>
-            <span style={{ fontSize: 11, color: '#C6FF3D', background: 'rgba(198,255,61,0.1)', padding: '2px 8px', borderRadius: 4 }}>
+            <span style={{ fontSize: 11, color: '#1D634E', background: 'rgba(29, 99, 78, 0.12)', padding: '2px 8px', borderRadius: 4, fontWeight: 700 }}>
               {formatTime(currentTime)} / {formatTime(totalDuration)}
             </span>
           </div>
 
-          {/* Video Player (jika video lokal tersedia) atau Placeholder */}
-          <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', background: '#000', borderRadius: 8, overflow: 'hidden' }}>
-            {previewUrl || videoUrl ? (
+          {/* Video Player (jika video lokal tersedia) atau YouTube IFrame - KEPT DARK */}
+          <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', background: '#000000', borderRadius: 10, overflow: 'hidden' }}>
+            {videoSrc ? (
               <>
                 <video
                   ref={videoRef}
-                  src={previewUrl || videoUrl || ''}
+                  src={videoSrc}
+                  onLoadedMetadata={() => {
+                    if (videoRef.current) {
+                      videoRef.current.currentTime = clipStart;
+                      setCurrentTime(clipStart);
+                    }
+                  }}
                   onTimeUpdate={handleTimeUpdate}
                   style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                 />
@@ -333,19 +429,53 @@ export default function AnalyzeStep() {
                     position: 'absolute',
                     bottom: 12,
                     left: 12,
-                    width: 36,
-                    height: 36,
+                    width: 38,
+                    height: 38,
                     borderRadius: '50%',
-                    background: 'rgba(198,255,61,0.9)',
-                    color: '#0B0B10',
+                    background: '#1D634E',
+                    color: '#F6F4F1',
                     border: 'none',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
+                    zIndex: 10,
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
                   }}
                 >
-                  {isPlaying ? <Pause size={18} /> : <Play size={18} style={{ marginLeft: 2 }} />}
+                  <Icon icon={isPlaying ? 'solar:pause-bold-duotone' : 'solar:play-bold-duotone'} width={18} height={18} />
+                </button>
+              </>
+            ) : isYoutube ? (
+              <>
+                <iframe
+                  ref={ytIframeRef}
+                  src={`https://www.youtube.com/embed/${effectiveYoutubeId}?enablejsapi=1&rel=0&modestbranding=1&start=${Math.floor(clipStart)}`}
+                  allow="autoplay; encrypted-media"
+                  style={{ width: '100%', height: '100%', border: 'none' }}
+                  title="YouTube Preview"
+                />
+                <button
+                  onClick={togglePlay}
+                  style={{
+                    position: 'absolute',
+                    bottom: 12,
+                    left: 12,
+                    width: 38,
+                    height: 38,
+                    borderRadius: '50%',
+                    background: '#1D634E',
+                    color: '#F6F4F1',
+                    border: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    zIndex: 10,
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+                  }}
+                >
+                  <Icon icon={isPlaying ? 'solar:pause-bold-duotone' : 'solar:play-bold-duotone'} width={18} height={18} />
                 </button>
               </>
             ) : (
@@ -358,28 +488,28 @@ export default function AnalyzeStep() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: 8,
-                  color: '#7A7A8A',
+                  color: '#5A635F',
                   padding: 20,
                   textAlign: 'center',
                 }}
               >
-                <Film size={36} style={{ color: '#C6FF3D', opacity: 0.8 }} />
-                <div style={{ fontSize: 12, color: '#E8E8F0', fontWeight: 600 }}>Mode Cepat YouTube (Tanpa Download di Awal)</div>
-                <div style={{ fontSize: 11 }}>Video utuh akan diunduh secara otomatis begitu kamu mengklik tombol "Lanjut Edit" di bawah.</div>
+                <Icon icon="solar:videocamera-record-bold-duotone" width={36} height={36} style={{ color: '#1D634E' }} />
+                <div style={{ fontSize: 13, color: '#F6F4F1', fontWeight: 600 }}>Belum Ada Sumber Video</div>
+                <div style={{ fontSize: 11 }}>Silakan masukkan URL YouTube atau upload file video di Tahap 1.</div>
               </div>
             )}
           </div>
 
           {/* Timeline Visual & Scrubber Rentang Klip */}
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#7A7A8A', marginBottom: 8 }}>
-              <span>Mulai: <strong style={{ color: '#E8E8F0' }}>{formatTime(edit.clip_start)}</strong></span>
-              <span>Durasi Klip: <strong style={{ color: '#C6FF3D' }}>{((edit.clip_end ?? totalDuration) - edit.clip_start).toFixed(1)}s</strong></span>
-              <span>Selesai: <strong style={{ color: '#E8E8F0' }}>{formatTime(edit.clip_end ?? totalDuration)}</strong></span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#5A635F', marginBottom: 8 }}>
+              <span>Mulai: <strong style={{ color: '#111916' }}>{formatTime(edit.clip_start)}</strong></span>
+              <span>Durasi Klip: <strong style={{ color: '#1D634E' }}>{((edit.clip_end ?? totalDuration) - edit.clip_start).toFixed(1)}s</strong></span>
+              <span>Selesai: <strong style={{ color: '#111916' }}>{formatTime(edit.clip_end ?? totalDuration)}</strong></span>
             </div>
 
             {/* Bar Slider Rentang Klip */}
-            <div style={{ position: 'relative', height: 24, background: '#0B0B10', borderRadius: 6, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
+            <div style={{ position: 'relative', height: 24, background: '#EFF2F0', borderRadius: 8, overflow: 'hidden', border: '1px solid #D3D9D6' }}>
               {/* Highlight area segmen */}
               <div
                 style={{
@@ -387,9 +517,9 @@ export default function AnalyzeStep() {
                   left: `${(edit.clip_start / totalDuration) * 100}%`,
                   width: `${(((edit.clip_end ?? totalDuration) - edit.clip_start) / totalDuration) * 100}%`,
                   height: '100%',
-                  background: 'rgba(198,255,61,0.25)',
-                  borderLeft: '2px solid #C6FF3D',
-                  borderRight: '2px solid #C6FF3D',
+                  background: 'rgba(29, 99, 78, 0.25)',
+                  borderLeft: '2px solid #1D634E',
+                  borderRight: '2px solid #1D634E',
                 }}
               />
               {/* Marker Current Time */}
@@ -399,7 +529,7 @@ export default function AnalyzeStep() {
                   left: `${(currentTime / totalDuration) * 100}%`,
                   width: 2,
                   height: '100%',
-                  background: '#FFFFFF',
+                  background: '#111916',
                   zIndex: 2,
                 }}
               />
@@ -409,7 +539,7 @@ export default function AnalyzeStep() {
           {/* Input Numeric untuk Start & End */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
-              <label style={{ display: 'block', fontSize: 11, color: '#7A7A8A', marginBottom: 4, fontWeight: 600 }}>
+              <label style={{ display: 'block', fontSize: 11, color: '#5A635F', marginBottom: 4, fontWeight: 700 }}>
                 WAKTU MULAI (mm:ss.s / detik)
               </label>
               <input
@@ -422,11 +552,11 @@ export default function AnalyzeStep() {
                 }}
                 style={{
                   width: '100%',
-                  background: '#0B0B10',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  borderRadius: 6,
+                  background: '#EFF2F0',
+                  border: '1px solid #D3D9D6',
+                  borderRadius: 8,
                   padding: '8px 10px',
-                  color: '#E8E8F0',
+                  color: '#111916',
                   fontSize: 12,
                   fontFamily: "'JetBrains Mono', monospace",
                   outline: 'none',
@@ -435,7 +565,7 @@ export default function AnalyzeStep() {
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: 11, color: '#7A7A8A', marginBottom: 4, fontWeight: 600 }}>
+              <label style={{ display: 'block', fontSize: 11, color: '#5A635F', marginBottom: 4, fontWeight: 700 }}>
                 WAKTU SELESAI (mm:ss.s / detik)
               </label>
               <input
@@ -448,11 +578,11 @@ export default function AnalyzeStep() {
                 }}
                 style={{
                   width: '100%',
-                  background: '#0B0B10',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  borderRadius: 6,
+                  background: '#EFF2F0',
+                  border: '1px solid #D3D9D6',
+                  borderRadius: 8,
                   padding: '8px 10px',
-                  color: '#E8E8F0',
+                  color: '#111916',
                   fontSize: 12,
                   fontFamily: "'JetBrains Mono', monospace",
                   outline: 'none',
@@ -470,21 +600,22 @@ export default function AnalyzeStep() {
               justifyContent: 'center',
               gap: 8,
               padding: '12px 20px',
-              borderRadius: 8,
+              borderRadius: 10,
               border: 'none',
               cursor: 'pointer',
               fontFamily: "'Montserrat', sans-serif",
               fontWeight: 800,
               fontSize: 12,
-              background: '#C6FF3D',
-              color: '#0B0B10',
+              background: '#1D634E',
+              color: '#F6F4F1',
               letterSpacing: '0.04em',
               marginTop: 10,
-              boxShadow: '0 0 16px rgba(198,255,61,0.25)',
+              boxShadow: '0 2px 10px rgba(29, 99, 78, 0.25)',
+              transition: 'all 0.15s ease',
             }}
           >
             LANJUT KE EDIT ({markedClipIds.length > 0 ? `${markedClipIds.length} KLIP TERPILIH` : 'KLIP INI'})
-            <ArrowRight size={15} />
+            <Icon icon="solar:arrow-right-bold-duotone" width={16} height={16} />
           </button>
         </div>
 
@@ -493,14 +624,14 @@ export default function AnalyzeStep() {
           {/* Header & Aksi Multi-Clip */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 700, fontSize: 14, color: '#E8E8F0' }}>
+              <span style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 700, fontSize: 14, color: '#111916' }}>
                 Kandidat Klip AI ({clips.length})
               </span>
-              <span style={{ fontSize: 10, color: '#7A7A8A', background: '#12121A', padding: '2px 6px', borderRadius: 4, border: '1px solid rgba(255,255,255,0.06)' }}>
+              <span style={{ fontSize: 10, color: '#5A635F', background: '#EFF2F0', padding: '3px 8px', borderRadius: 4, border: '1px solid #D3D9D6' }}>
                 Target Durasi Ideal: 30–65 detik
               </span>
               {clips.length > 0 && (
-                <span style={{ fontSize: 11, background: 'rgba(198,255,61,0.15)', color: '#C6FF3D', padding: '2px 8px', borderRadius: 4, fontWeight: 700 }}>
+                <span style={{ fontSize: 11, background: 'rgba(29, 99, 78, 0.12)', color: '#1D634E', padding: '2px 8px', borderRadius: 4, fontWeight: 700 }}>
                   {markedClipIds.length} Ditandai
                 </span>
               )}
@@ -516,18 +647,18 @@ export default function AnalyzeStep() {
                       display: 'flex',
                       alignItems: 'center',
                       gap: 4,
-                      padding: '5px 10px',
+                      padding: '6px 12px',
                       borderRadius: 6,
-                      border: '1px solid rgba(255,255,255,0.12)',
-                      background: 'transparent',
-                      color: '#E8E8F0',
+                      border: '1px solid #D3D9D6',
+                      background: '#EFF2F0',
+                      color: '#111916',
                       cursor: 'pointer',
                       fontSize: 11,
                       fontFamily: "'Montserrat', sans-serif",
                       fontWeight: 600,
                     }}
                   >
-                    <CheckSquare size={12} />
+                    <Icon icon="solar:check-square-bold-duotone" width={14} height={14} />
                     Mark All
                   </button>
                   <button
@@ -537,18 +668,18 @@ export default function AnalyzeStep() {
                       display: 'flex',
                       alignItems: 'center',
                       gap: 4,
-                      padding: '5px 10px',
+                      padding: '6px 12px',
                       borderRadius: 6,
-                      border: '1px solid rgba(255,255,255,0.12)',
-                      background: 'transparent',
-                      color: '#7A7A8A',
+                      border: '1px solid #D3D9D6',
+                      background: '#EFF2F0',
+                      color: '#5A635F',
                       cursor: 'pointer',
                       fontSize: 11,
                       fontFamily: "'Montserrat', sans-serif",
                       fontWeight: 600,
                     }}
                   >
-                    <Square size={12} />
+                    <Icon icon="solar:square-bold-duotone" width={14} height={14} />
                     Unmark All
                   </button>
                 </>
@@ -560,18 +691,18 @@ export default function AnalyzeStep() {
                   display: 'flex',
                   alignItems: 'center',
                   gap: 6,
-                  padding: '5px 12px',
+                  padding: '6px 14px',
                   borderRadius: 6,
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  background: 'transparent',
-                  color: '#E8E8F0',
+                  border: '1px solid #D3D9D6',
+                  background: '#EFF2F0',
+                  color: '#111916',
                   cursor: 'pointer',
                   fontSize: 11,
                   fontFamily: "'Montserrat', sans-serif",
                   fontWeight: 600,
                 }}
               >
-                <Plus size={13} />
+                <Icon icon="solar:add-circle-bold-duotone" width={14} height={14} />
                 Tambah Manual
               </button>
             </div>
@@ -580,21 +711,21 @@ export default function AnalyzeStep() {
           {clips.length === 0 && (
             <div
               style={{
-                background: '#12121A',
-                border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: 12,
+                background: '#F6F4F1',
+                border: '1px solid #D3D9D6',
+                borderRadius: 16,
                 padding: 40,
                 textAlign: 'center',
-                color: '#7A7A8A',
+                color: '#5A635F',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
                 gap: 12,
               }}
             >
-              <Scissors size={32} style={{ opacity: 0.3 }} />
-              <div style={{ fontSize: 13 }}>Belum ada segmen yang dianalisis.</div>
-              <div style={{ fontSize: 11 }}>Klik tombol "Analisis Potensi Klip" di atas untuk meminta AI menemukan 5–10 segmen terbaik.</div>
+              <Icon icon="solar:scissors-bold-duotone" width={36} height={36} style={{ color: '#1D634E', opacity: 0.4 }} />
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#111916' }}>Belum ada segmen yang dianalisis.</div>
+              <div style={{ fontSize: 12 }}>Klik tombol "Analisis Potensi Klip" di atas untuk meminta AI menemukan 5–10 segmen terbaik.</div>
             </div>
           )}
 
@@ -608,20 +739,20 @@ export default function AnalyzeStep() {
                 key={clipId}
                 onClick={() => handleSelectClip(clip)}
                 style={{
-                  background: isActive ? 'rgba(198,255,61,0.06)' : isMarked ? '#14141E' : '#0F0F15',
+                  background: isActive ? 'rgba(29, 99, 78, 0.08)' : isMarked ? '#EFF2F0' : '#F6F4F1',
                   border: isActive
-                    ? '1.5px solid #C6FF3D'
+                    ? '1.5px solid #1D634E'
                     : isMarked
-                    ? '1px solid rgba(198,255,61,0.3)'
-                    : '1px solid rgba(255,255,255,0.06)',
-                  borderRadius: 10,
+                    ? '1px solid #1D634E'
+                    : '1px solid #D3D9D6',
+                  borderRadius: 12,
                   padding: 16,
                   cursor: 'pointer',
-                  transition: 'all 0.15s',
+                  transition: 'all 0.15s ease',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 10,
-                  boxShadow: isActive ? '0 0 16px rgba(198,255,61,0.1)' : 'none',
+                  boxShadow: isActive ? '0 2px 8px rgba(29, 99, 78, 0.12)' : '0 1px 2px rgba(17,25,22,0.03)',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
@@ -634,38 +765,38 @@ export default function AnalyzeStep() {
                       }}
                       title={isMarked ? 'Hapus tanda klip' : 'Tandai klip ini untuk diedit'}
                       style={{
-                        background: isMarked ? '#C6FF3D' : 'rgba(255,255,255,0.08)',
-                        color: isMarked ? '#0B0B10' : '#7A7A8A',
-                        border: 'none',
-                        borderRadius: 5,
-                        width: 24,
-                        height: 24,
+                        background: isMarked ? '#1D634E' : '#EFF2F0',
+                        color: isMarked ? '#F6F4F1' : '#5A635F',
+                        border: '1px solid #D3D9D6',
+                        borderRadius: 6,
+                        width: 26,
+                        height: 26,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         cursor: 'pointer',
                       }}
                     >
-                      {isMarked ? <CheckSquare size={15} /> : <Square size={15} />}
+                      <Icon icon={isMarked ? 'solar:check-square-bold-duotone' : 'solar:square-bold-duotone'} width={16} height={16} />
                     </button>
 
                     {/* Gauge Skor Viralitas */}
                     <div
                       style={{
-                        padding: '4px 8px',
+                        padding: '4px 10px',
                         borderRadius: 6,
                         background:
                           clip.virality_score >= 85
-                            ? 'rgba(198,255,61,0.2)'
+                            ? 'rgba(29, 99, 78, 0.15)'
                             : clip.virality_score >= 70
-                            ? 'rgba(255,170,0,0.2)'
-                            : 'rgba(255,255,255,0.08)',
+                            ? 'rgba(202, 138, 4, 0.15)'
+                            : '#EFF2F0',
                         color:
                           clip.virality_score >= 85
-                            ? '#C6FF3D'
+                            ? '#1D634E'
                             : clip.virality_score >= 70
-                            ? '#FFAA00'
-                            : '#E8E8F0',
+                            ? '#CA8A04'
+                            : '#5A635F',
                         fontFamily: "'Montserrat', sans-serif",
                         fontWeight: 900,
                         fontSize: 12,
@@ -674,22 +805,22 @@ export default function AnalyzeStep() {
                         gap: 4,
                       }}
                     >
-                      <Flame size={13} />
+                      <Icon icon="solar:fire-bold-duotone" width={14} height={14} />
                       {clip.virality_score}
                     </div>
 
-                    <div style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 700, fontSize: 13, color: '#E8E8F0' }}>
+                    <div style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 700, fontSize: 13, color: '#111916' }}>
                       {clip.title}
                     </div>
                   </div>
 
-                  <div style={{ fontSize: 11, color: '#7A7A8A', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <Clock size={12} />
+                  <div style={{ fontSize: 11, color: '#5A635F', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Icon icon="solar:clock-circle-bold-duotone" width={14} height={14} />
                     {clip.duration}s ({formatTime(clip.start)} - {formatTime(clip.end)})
                   </div>
                 </div>
 
-                <div style={{ fontSize: 12, color: '#7A7A8A', lineHeight: 1.5 }}>
+                <div style={{ fontSize: 12, color: '#5A635F', lineHeight: 1.5 }}>
                   {clip.reason}
                 </div>
 
@@ -704,12 +835,12 @@ export default function AnalyzeStep() {
                           setEdit({ hook_text: h });
                         }}
                         style={{
-                          fontSize: 10,
+                          fontSize: 11,
                           padding: '3px 8px',
-                          borderRadius: 4,
-                          background: 'rgba(255,255,255,0.05)',
-                          color: '#C6FF3D',
-                          border: '1px solid rgba(198,255,61,0.2)',
+                          borderRadius: 6,
+                          background: '#EFF2F0',
+                          color: '#1D634E',
+                          border: '1px solid rgba(29, 99, 78, 0.25)',
                           cursor: 'pointer',
                         }}
                       >
@@ -721,7 +852,7 @@ export default function AnalyzeStep() {
 
                 {/* Action Buttons Bar */}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
-                  {previewUrl || videoUrl ? (
+                  {(videoSrc || isYoutube) ? (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -731,18 +862,18 @@ export default function AnalyzeStep() {
                         display: 'flex',
                         alignItems: 'center',
                         gap: 4,
-                        padding: '5px 10px',
+                        padding: '6px 12px',
                         borderRadius: 6,
-                        border: '1px solid rgba(255,255,255,0.12)',
-                        background: 'transparent',
-                        color: '#E8E8F0',
+                        border: '1px solid #D3D9D6',
+                        background: '#EFF2F0',
+                        color: '#111916',
                         fontSize: 11,
                         cursor: 'pointer',
                         fontFamily: "'Montserrat', sans-serif",
                         fontWeight: 600,
                       }}
                     >
-                      <Play size={11} />
+                      <Icon icon="solar:play-bold-duotone" width={13} height={13} />
                       Putar Segmen
                     </button>
                   ) : null}
@@ -756,18 +887,18 @@ export default function AnalyzeStep() {
                       display: 'flex',
                       alignItems: 'center',
                       gap: 4,
-                      padding: '5px 12px',
+                      padding: '6px 14px',
                       borderRadius: 6,
                       border: 'none',
-                      background: isActive ? '#C6FF3D' : 'rgba(255,255,255,0.1)',
-                      color: isActive ? '#0B0B10' : '#E8E8F0',
+                      background: isActive ? '#1D634E' : '#EFF2F0',
+                      color: isActive ? '#F6F4F1' : '#111916',
                       fontSize: 11,
                       cursor: 'pointer',
                       fontFamily: "'Montserrat', sans-serif",
                       fontWeight: 700,
                     }}
                   >
-                    {isActive ? <CheckCircle2 size={12} /> : null}
+                    {isActive && <Icon icon="solar:check-circle-bold-duotone" width={14} height={14} />}
                     {isActive ? 'Aktif Diedit' : 'Pilih Klip'}
                   </button>
                 </div>

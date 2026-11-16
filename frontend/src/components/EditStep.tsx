@@ -1,4 +1,4 @@
-import { Loader2, Scissors, CheckCircle2, Film } from 'lucide-react';
+import { Icon } from '@iconify/react';
 import EditLeftPanel from './EditLeftPanel';
 import EditCenterCanvas from './EditCenterCanvas';
 import EditRightStyler from './EditRightStyler';
@@ -27,15 +27,15 @@ export default function EditStep() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, height: '100%' }}>
       {/* Banner Notifikasi Download YouTube di Background */}
       {isDownloadingYoutube && (
         <div
           style={{
-            background: 'linear-gradient(90deg, #181B10 0%, #12121A 100%)',
-            border: '1px solid rgba(198,255,61,0.3)',
-            borderRadius: 10,
-            padding: '10px 18px',
+            background: '#EFF2F0',
+            border: '1px solid #D3D9D6',
+            borderRadius: 12,
+            padding: '12px 18px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -43,30 +43,30 @@ export default function EditStep() {
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Loader2 size={16} className="animate-spin" style={{ color: '#C6FF3D' }} />
+            <Icon icon="solar:refresh-circle-bold-duotone" width={20} height={20} className="animate-spin" style={{ color: '#1D634E' }} />
             <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#E8E8F0', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Film size={13} style={{ color: '#C6FF3D' }} />
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#111916', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Icon icon="solar:videocamera-record-bold-duotone" width={16} height={16} style={{ color: '#1D634E' }} />
                 <span>{youtubeDownloadStage || 'Mengunduh video HD YouTube di latar belakang...'}</span>
               </div>
-              <div style={{ fontSize: 11, color: '#7A7A8A', marginTop: 1 }}>
+              <div style={{ fontSize: 12, color: '#5A635F', marginTop: 1 }}>
                 Kamu sudah bisa mengatur font, subtitle, hook, dan layout klip sekarang. Video akan otomatis muncul begitu selesai diunduh.
               </div>
             </div>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 200 }}>
-            <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.08)', borderRadius: 3, overflow: 'hidden' }}>
+            <div style={{ flex: 1, height: 6, background: '#D3D9D6', borderRadius: 3, overflow: 'hidden' }}>
               <div
                 style={{
                   height: '100%',
-                  background: '#C6FF3D',
+                  background: '#1D634E',
                   width: `${youtubeDownloadProgress}%`,
                   transition: 'width 0.3s ease',
                 }}
               />
             </div>
-            <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: '#C6FF3D', fontWeight: 700, width: 36, textAlign: 'right' }}>
+            <span style={{ fontSize: 12, fontFamily: "'JetBrains Mono', monospace", color: '#1D634E', fontWeight: 700, width: 36, textAlign: 'right' }}>
               {youtubeDownloadProgress}%
             </span>
           </div>
@@ -80,15 +80,15 @@ export default function EditStep() {
             display: 'flex',
             alignItems: 'center',
             gap: 10,
-            background: '#12121A',
-            border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: 10,
+            background: '#F6F4F1',
+            border: '1px solid #D3D9D6',
+            borderRadius: 12,
             padding: '8px 14px',
             overflowX: 'auto',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontFamily: "'Montserrat', sans-serif", fontWeight: 700, color: '#7A7A8A', whiteSpace: 'nowrap', paddingRight: 6, borderRight: '1px solid rgba(255,255,255,0.08)' }}>
-            <Scissors size={13} style={{ color: '#C6FF3D' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontFamily: "'Montserrat', sans-serif", fontWeight: 700, color: '#5A635F', whiteSpace: 'nowrap', paddingRight: 8, borderRight: '1px solid #D3D9D6' }}>
+            <Icon icon="solar:scissors-bold-duotone" width={16} height={16} style={{ color: '#1D634E' }} />
             CLIP SWITCHER ({displayClips.length})
           </div>
 
@@ -107,21 +107,21 @@ export default function EditStep() {
                     alignItems: 'center',
                     gap: 8,
                     padding: '6px 14px',
-                    borderRadius: 7,
-                    border: isActive ? '1px solid #C6FF3D' : '1px solid rgba(255,255,255,0.08)',
-                    background: isActive ? 'rgba(198,255,61,0.15)' : 'rgba(255,255,255,0.02)',
-                    color: isActive ? '#C6FF3D' : '#A0A0B0',
+                    borderRadius: 8,
+                    border: isActive ? '1px solid #1D634E' : '1px solid #D3D9D6',
+                    background: isActive ? '#1D634E' : '#EFF2F0',
+                    color: isActive ? '#F6F4F1' : '#5A635F',
                     cursor: 'pointer',
                     fontSize: 11,
                     fontFamily: "'Montserrat', sans-serif",
                     fontWeight: 700,
                     whiteSpace: 'nowrap',
-                    transition: 'all 0.15s',
+                    transition: 'all 0.15s ease',
                   }}
                 >
-                  {isActive && <CheckCircle2 size={12} />}
+                  {isActive && <Icon icon="solar:check-circle-bold-duotone" width={14} height={14} />}
                   <span>Klip #{idx + 1}: {clip.title.length > 20 ? clip.title.substring(0, 18) + '...' : clip.title}</span>
-                  <span style={{ fontSize: 10, opacity: 0.7, fontFamily: "'JetBrains Mono', monospace" }}>
+                  <span style={{ fontSize: 10, opacity: 0.8, fontFamily: "'JetBrains Mono', monospace" }}>
                     ({dur}s | {formatSec(clip.start)})
                   </span>
                 </button>
@@ -137,10 +137,11 @@ export default function EditStep() {
           display: 'flex',
           height: 'calc(100vh - 140px)',
           minHeight: 640,
-          background: '#0B0B10',
-          borderRadius: 12,
+          background: '#F6F4F1',
+          borderRadius: 16,
           overflow: 'hidden',
-          border: '1px solid rgba(255,255,255,0.08)',
+          border: '1px solid #D3D9D6',
+          boxShadow: '0 1px 4px rgba(17,25,22,0.04)',
         }}
       >
         {/* Kolom Kiri: SRT, Hook, SFX, Font */}
