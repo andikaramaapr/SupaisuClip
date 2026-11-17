@@ -10,6 +10,15 @@ export interface Rect {
   h: number;
 }
 
+export interface CameraKeyframe {
+  id: string;
+  time: number;      // detik relatif terhadap awal klip (0 s/d durasi klip)
+  x_offset: number;  // posisi horizontal (sesuai skala main_x_offset 0..1)
+  y_offset: number;  // posisi vertikal (sesuai skala main_y_offset 0..1)
+  zoom: number;      // skala zoom (sesuai skala main_zoom 1..4)
+  easing: 'smooth' | 'hold'; // 'smooth' = pan mulus, 'hold' = cut/lompat instan
+}
+
 export type NormalizedRect = Rect;
 
 export interface WebcamStyle {
@@ -77,6 +86,7 @@ export interface EditState {
   main_x_offset: number;
   main_y_offset: number;
   main_zoom: number;
+  camera_keyframes: CameraKeyframe[];
   webcam_enabled: boolean;
   webcam_src: Rect | null;
   webcam_dst: Rect | null;
@@ -128,6 +138,7 @@ export const DEFAULT_EDIT_STATE: EditState = {
   main_x_offset: 0.5,
   main_y_offset: 0.5,
   main_zoom: 1.0,
+  camera_keyframes: [],
   webcam_enabled: false,
   webcam_src: null,
   webcam_dst: null,

@@ -63,8 +63,18 @@ export default function ExportStep() {
     setRenderError('');
     setExportUrl('');
 
+    // Pastikan style_key tidak kosong atau ter-reset menjadi "NONE"
+    const rawStyle = edit.style_key;
+    const effectiveStyle =
+      !rawStyle || rawStyle.trim() === '' || rawStyle.toLowerCase() === 'none'
+        ? 'viral_pop'
+        : rawStyle;
+
     const payload = {
       ...edit,
+      style_key: effectiveStyle,
+      subtitle_margin_v: edit.subtitle_margin_v ?? 340,
+      srt_relative: false,          // selalu kirim sebagai absolut; backend yang normalkan
       preview_seconds: previewOnly ? 5 : null,
     };
 

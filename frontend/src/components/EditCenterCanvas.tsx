@@ -2,10 +2,57 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Icon } from '@iconify/react';
 import { useStore } from '../store';
 import { fetchYoutubeFrame } from '../api';
-import type { Rect } from '../types';
+import type { Rect, CameraKeyframe } from '../types';
 
 const NATIVE_W = 1080;
 const NATIVE_H = 1920;
+
+// Helper menghitung posisi kamera saat ini berdasarkan camera keyframes
+function getCurrentCameraTransform(
+  keyframes: CameraKeyframe[] | undefined,
+  relTime: number,
+  defaultX: number,
+  defaultY: number,
+  defaultZoom: number,
+): { x_offset: number; y_offset: number; zoom: number } {
+  if (!keyframes || keyframes.length === 0) {
+    return { x_offset: defaultX, y_offset: defaultY, zoom: defaultZoom };
+  }
+  const sorted = [...keyframes].sort((a, b) => a.time - b.time);
+  if (relTime <= sorted[0].time) {
+    return {
+      x_offset: sorted[0].x_offset,
+      y_offset: sorted[0].y_offset,
+      zoom: sorted[0].zoom,
+    };
+  }
+  if (relTime >= sorted[sorted.length - 1].time) {
+    const last = sorted[sorted.length - 1];
+    return {
+      x_offset: last.x_offset,
+      y_offset: last.y_offset,
+      zoom: last.zoom,
+    };
+  }
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const k1 = sorted[i];
+    const k2 = sorted[i + 1];
+    if (relTime >= k1.time && relTime <= k2.time) {
+      if (k1.easing === 'hold') {
+        return { x_offset: k1.x_offset, y_offset: k1.y_offset, zoom: k1.zoom };
+      }
+      const dt = Math.max(0.001, k2.time - k1.time);
+      const u = Math.max(0, Math.min(1, (relTime - k1.time) / dt));
+      const eased = u * u * (3 - 2 * u);
+      return {
+        x_offset: k1.x_offset + (k2.x_offset - k1.x_offset) * eased,
+        y_offset: k1.y_offset + (k2.y_offset - k1.y_offset) * eased,
+        zoom: k1.zoom + (k2.zoom - k1.zoom) * eased,
+      };
+    }
+  }
+  return { x_offset: defaultX, y_offset: defaultY, zoom: defaultZoom };
+}
 
 // Subtitle parser sederhana untuk preview sync
 function parseSrtForPreview(srtText: string) {
@@ -76,7 +123,19 @@ function extractYoutubeId(url: string): string | null {
 }
 
 export default function EditCenterCanvas() {
-  const { edit, setEdit, videoMeta, videoUrl, previewUrl, youtubeVideoId, youtubeUrl, activeClipId } = useStore();
+  const {
+    edit,
+    setEdit,
+    videoMeta,
+    videoUrl,
+    previewUrl,
+    youtubeVideoId,
+    youtubeUrl,
+    activeClipId,
+    setPreviewTime,
+    seekRequestTime,
+    requestSeek,
+  } = useStore();
   // effectiveYoutubeId: coba dari store, lalu dari edit.youtube_url, lalu dari youtubeUrl store
   const effectiveYoutubeId =
     (youtubeVideoId && youtubeVideoId !== '' ? youtubeVideoId : null) ||
@@ -126,6 +185,16 @@ export default function EditCenterCanvas() {
   const [zoomPreset, setZoomPreset] = useState<'fit' | number>('fit');
   const [ytFrameUrl, setYtFrameUrl] = useState<string | null>(null);
 
+  // Posisi kamera aktif (interpolasi realtime dari camera keyframes jika ada)
+  const relTimeForCam = Math.max(0, currentTime - edit.clip_start);
+  const currentCam = getCurrentCameraTransform(
+    edit.camera_keyframes,
+    relTimeForCam,
+    edit.main_x_offset ?? 0.5,
+    edit.main_y_offset ?? 0.5,
+    edit.main_zoom ?? 1.0,
+  );
+
   // Ambil frame tengah video untuk framing webcam saat mode YouTube
   useEffect(() => {
     if (!isYoutubeMode || !effectiveYoutubeId) return;
@@ -170,6 +239,7 @@ export default function EditCenterCanvas() {
     if (!videoRef.current) return;
     const cur = videoRef.current.currentTime;
     setCurrentTime(cur);
+    setPreviewTime(Math.max(0, cur - edit.clip_start));
 
     // Batasi dalam rentang klip (loop / pause saat sampai clip_end)
     const end = edit.clip_end ?? videoMeta?.duration ?? 999999;
@@ -178,6 +248,7 @@ export default function EditCenterCanvas() {
       setIsPlaying(false);
       videoRef.current.currentTime = edit.clip_start;
       setCurrentTime(edit.clip_start);
+      setPreviewTime(0);
     }
   };
 
@@ -185,6 +256,7 @@ export default function EditCenterCanvas() {
     if (videoRef.current) {
       videoRef.current.currentTime = edit.clip_start;
       setCurrentTime(edit.clip_start);
+      setPreviewTime(0);
     }
   };
 
@@ -203,16 +275,78 @@ export default function EditCenterCanvas() {
     );
   };
 
+  // Tangani permintaan seek dari luar (misal klik keyframe di EditRightStyler)
+  useEffect(() => {
+    if (seekRequestTime === null || seekRequestTime === undefined) return;
+    const targetAbs = edit.clip_start + seekRequestTime;
+    setCurrentTime(targetAbs);
+    setPreviewTime(seekRequestTime);
+    ytTimeRef.current = targetAbs;
+
+    if (isYoutubeMode) {
+      ytSendCmd('seekTo', [targetAbs, true]);
+    } else if (videoRef.current) {
+      videoRef.current.currentTime = targetAbs;
+    }
+    requestSeek(null);
+  }, [seekRequestTime, edit.clip_start, isYoutubeMode, requestSeek, setPreviewTime]);
+
   // Otomatis sinkronkan waktu pemutar saat clip_start berubah atau berganti klip
   useEffect(() => {
     setCurrentTime(edit.clip_start);
+    setPreviewTime(0);
     ytTimeRef.current = edit.clip_start;
     if (isYoutubeMode) {
       ytSendCmd('seekTo', [edit.clip_start, true]);
     } else if (videoRef.current) {
       videoRef.current.currentTime = edit.clip_start;
     }
-  }, [edit.clip_start, isYoutubeMode]);
+  }, [edit.clip_start, isYoutubeMode, setPreviewTime]);
+
+  // 60fps RAF loop untuk kelancaran interpolasi transform kamera saat playback
+  useEffect(() => {
+    if (!isPlaying) return;
+    let animId: number;
+    let lastYtPerf = performance.now();
+
+    const loop = (now: number) => {
+      if (isYoutubeMode) {
+        const dt = (now - lastYtPerf) / 1000;
+        lastYtPerf = now;
+        ytTimeRef.current += dt;
+        const cur = ytTimeRef.current;
+        const end = edit.clip_end ?? videoMeta?.duration ?? 999999;
+        if (cur >= end) {
+          ytSendCmd('seekTo', [edit.clip_start, true]);
+          ytSendCmd('pauseVideo');
+          setIsPlaying(false);
+          ytTimeRef.current = edit.clip_start;
+          setCurrentTime(edit.clip_start);
+          setPreviewTime(0);
+          return;
+        }
+        setCurrentTime(cur);
+        setPreviewTime(Math.max(0, cur - edit.clip_start));
+      } else if (videoRef.current) {
+        const cur = videoRef.current.currentTime;
+        const end = edit.clip_end ?? videoMeta?.duration ?? 999999;
+        if (cur >= end) {
+          videoRef.current.pause();
+          setIsPlaying(false);
+          videoRef.current.currentTime = edit.clip_start;
+          setCurrentTime(edit.clip_start);
+          setPreviewTime(0);
+          return;
+        }
+        setCurrentTime(cur);
+        setPreviewTime(Math.max(0, cur - edit.clip_start));
+      }
+      animId = requestAnimationFrame(loop);
+    };
+
+    animId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(animId);
+  }, [isPlaying, isYoutubeMode, edit.clip_start, edit.clip_end, videoMeta?.duration, setPreviewTime]);
 
   // Poll YouTube currentTime every 250ms
   useEffect(() => {
@@ -225,13 +359,17 @@ export default function EditCenterCanvas() {
         }
         if (data?.event === 'infoDelivery' && data?.info?.currentTime !== undefined) {
           const cur = data.info.currentTime as number;
-          ytTimeRef.current = cur;
+          if (Math.abs(ytTimeRef.current - cur) > 0.3) {
+            ytTimeRef.current = cur;
+          }
           setCurrentTime(cur);
+          setPreviewTime(Math.max(0, cur - edit.clip_start));
           const end = edit.clip_end ?? videoMeta?.duration ?? 999999;
           if (cur >= end) {
             ytSendCmd('seekTo', [edit.clip_start, true]);
             ytSendCmd('pauseVideo');
             setIsPlaying(false);
+            setPreviewTime(0);
           }
         }
       } catch { /* ignore */ }
@@ -247,7 +385,7 @@ export default function EditCenterCanvas() {
       window.removeEventListener('message', handleMsg);
       if (ytPollRef.current) clearInterval(ytPollRef.current);
     };
-  }, [isYoutubeMode, edit.clip_end, edit.clip_start, videoMeta?.duration]);
+  }, [isYoutubeMode, edit.clip_end, edit.clip_start, videoMeta?.duration, setPreviewTime]);
 
   const togglePlay = () => {
     if (isYoutubeMode) {
@@ -944,7 +1082,7 @@ export default function EditCenterCanvas() {
                           top: '50%',
                           width: '316.05%',
                           height: '100%',
-                          transform: `translate(-50%, -50%) scale(${edit.main_zoom}) translate(${(0.5 - edit.main_x_offset) * 30}%, ${(0.5 - edit.main_y_offset) * 30}%)`,
+                          transform: `translate(-50%, -50%) scale(${currentCam.zoom}) translate(${(0.5 - currentCam.x_offset) * 30}%, ${(0.5 - currentCam.y_offset) * 30}%)`,
                         }),
                   }}
                   title="YouTube Preview"
@@ -967,7 +1105,7 @@ export default function EditCenterCanvas() {
                   objectFit: edit.layout_mode === 'blur_bg' ? 'contain' : 'cover',
                   transform:
                     edit.layout_mode === 'fill_crop'
-                      ? `scale(${edit.main_zoom}) translate(${(0.5 - edit.main_x_offset) * 30}%, ${(0.5 - edit.main_y_offset) * 30}%)`
+                      ? `scale(${currentCam.zoom}) translate(${(0.5 - currentCam.x_offset) * 30}%, ${(0.5 - currentCam.y_offset) * 30}%)`
                       : 'none',
                 }}
               />
@@ -1397,6 +1535,7 @@ export default function EditCenterCanvas() {
         <button
           onClick={() => {
             setCurrentTime(edit.clip_start);
+            setPreviewTime(0);
             ytTimeRef.current = edit.clip_start;
             if (isYoutubeMode) {
               ytSendCmd('seekTo', [edit.clip_start, true]);
@@ -1421,30 +1560,97 @@ export default function EditCenterCanvas() {
           <Icon icon="solar:restart-bold-duotone" width={14} height={14} />
         </button>
 
-        {/* Scrubber Relatif Klip */}
+        {/* Tombol Cepat Tambah Keyframe Kamera */}
+        <button
+          onClick={() => {
+            const relT = parseFloat(Math.max(0, currentTime - edit.clip_start).toFixed(2));
+            const newKf: CameraKeyframe = {
+              id: `kf_${Date.now()}`,
+              time: relT,
+              x_offset: currentCam.x_offset,
+              y_offset: currentCam.y_offset,
+              zoom: currentCam.zoom,
+              easing: 'smooth',
+            };
+            const existing = (edit.camera_keyframes || []).filter((k) => Math.abs(k.time - relT) > 0.1);
+            const updated = [...existing, newKf].sort((a, b) => a.time - b.time);
+            setEdit({ camera_keyframes: updated });
+          }}
+          title="Tambah Camera Keyframe di posisi waktu saat ini"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 5,
+            padding: '6px 12px',
+            borderRadius: 6,
+            background: '#EFF2F0',
+            color: '#1D634E',
+            border: '1px solid #D3D9D6',
+            fontSize: 11,
+            fontWeight: 700,
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+            transition: 'all 0.15s ease',
+          }}
+        >
+          <Icon icon="solar:camera-bold-duotone" width={14} height={14} />
+          + Keyframe ({Math.max(0, currentTime - edit.clip_start).toFixed(1)}s)
+        </button>
+
+        {/* Scrubber Relatif Klip dengan Marker Keyframe */}
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 11, color: '#5A635F', fontFamily: "'JetBrains Mono', monospace" }}>
+          <span style={{ fontSize: 11, color: '#5A635F', fontFamily: "'JetBrains Mono', monospace", minWidth: 42 }}>
             {Math.max(0, currentTime - edit.clip_start).toFixed(1)}s
           </span>
-          <input
-            type="range"
-            min={edit.clip_start}
-            max={edit.clip_end ?? videoMeta?.duration ?? 60}
-            step={0.05}
-            value={currentTime}
-            onChange={(e) => {
-              const val = parseFloat(e.target.value);
-              setCurrentTime(val);
-              ytTimeRef.current = val;
-              if (isYoutubeMode) {
-                ytSendCmd('seekTo', [val, true]);
-              } else if (videoRef.current) {
-                videoRef.current.currentTime = val;
-              }
-            }}
-            style={{ flex: 1 }}
-          />
-          <span style={{ fontSize: 11, color: '#111916', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>
+          <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <input
+              type="range"
+              min={edit.clip_start}
+              max={edit.clip_end ?? videoMeta?.duration ?? 60}
+              step={0.05}
+              value={currentTime}
+              onChange={(e) => {
+                const val = parseFloat(e.target.value);
+                setCurrentTime(val);
+                setPreviewTime(Math.max(0, val - edit.clip_start));
+                ytTimeRef.current = val;
+                if (isYoutubeMode) {
+                  ytSendCmd('seekTo', [val, true]);
+                } else if (videoRef.current) {
+                  videoRef.current.currentTime = val;
+                }
+              }}
+              style={{ width: '100%', zIndex: 2 }}
+            />
+            {/* Visual Markers di timeline */}
+            {edit.camera_keyframes && edit.camera_keyframes.length > 0 && (
+              <div style={{ position: 'absolute', left: 0, right: 0, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', zIndex: 3 }}>
+                {edit.camera_keyframes.map((kf) => {
+                  const clipDur = Math.max(0.1, (edit.clip_end ?? videoMeta?.duration ?? 60) - edit.clip_start);
+                  const pct = Math.max(0, Math.min(100, (kf.time / clipDur) * 100));
+                  return (
+                    <div
+                      key={kf.id}
+                      title={`Keyframe: ${kf.time.toFixed(1)}s | X: ${Math.round(kf.x_offset * 100)}% | Zoom: ${kf.zoom.toFixed(1)}x`}
+                      style={{
+                        position: 'absolute',
+                        left: `${pct}%`,
+                        top: '50%',
+                        transform: 'translate(-50%, -50%) rotate(45deg)',
+                        width: 9,
+                        height: 9,
+                        background: '#1D634E',
+                        border: '1.5px solid #F6F4F1',
+                        borderRadius: 1.5,
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.35)',
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          <span style={{ fontSize: 11, color: '#111916', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, minWidth: 42 }}>
             {((edit.clip_end ?? videoMeta?.duration ?? 60) - edit.clip_start).toFixed(1)}s
           </span>
         </div>

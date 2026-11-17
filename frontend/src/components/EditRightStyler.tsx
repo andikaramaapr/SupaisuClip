@@ -1,8 +1,8 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { useStore } from '../store';
 import { highlightWords, suggestStyle, uploadFont } from '../api';
-import type { StyleKey, LetterStyle, SubtitleAnimation, LayoutMode } from '../types';
+import type { StyleKey, LetterStyle, SubtitleAnimation, LayoutMode, CameraKeyframe } from '../types';
 
 interface PresetDef {
   key: StyleKey;
@@ -115,9 +115,65 @@ const DEFAULT_FONTS = [
 ];
 
 export default function EditRightStyler() {
-  const { edit, setEdit, fonts, setFonts, setStep } = useStore();
+  const { edit, setEdit, fonts, setFonts, setStep, videoMeta, previewTime, requestSeek } = useStore();
+  const clipDuration = Math.max(1, (edit.clip_end ?? videoMeta?.duration ?? 30) - edit.clip_start);
+
+  // Helper sinkronisasi framing: perbarui edit dan perbarui keyframe jika playhead berada dekat (<= 0.15s)
+  const updateMainFraming = (patch: Partial<typeof edit>) => {
+    const curTime = previewTime || 0;
+    const kfs = edit.camera_keyframes || [];
+    const nearKfIndex = kfs.findIndex((k) => Math.abs(k.time - curTime) <= 0.15);
+
+    if (nearKfIndex !== -1) {
+      const updatedKfs = kfs.map((k, idx) => {
+        if (idx !== nearKfIndex) return k;
+        return {
+          ...k,
+          ...(patch.main_x_offset !== undefined ? { x_offset: patch.main_x_offset } : {}),
+          ...(patch.main_y_offset !== undefined ? { y_offset: patch.main_y_offset } : {}),
+          ...(patch.main_zoom !== undefined ? { zoom: patch.main_zoom } : {}),
+        };
+      });
+      setEdit({ ...patch, camera_keyframes: updatedKfs });
+    } else {
+      setEdit(patch);
+    }
+  };
 
   const [activeSection, setActiveSection] = useState<'subtitle' | 'framing'>('subtitle');
+  const [framingSubTab, setFramingSubTab] = useState<'static' | 'keyframes'>('static');
+  const prevKfCountRef = useRef(edit.camera_keyframes?.length || 0);
+
+  // Otomatis pindah ke sub-tab keyframes jika jumlah keyframe bertambah (misal dari tombol + Keyframe di timeline)
+  useEffect(() => {
+    const curCount = edit.camera_keyframes?.length || 0;
+    if (curCount > prevKfCountRef.current) {
+      setFramingSubTab('keyframes');
+    }
+    prevKfCountRef.current = curCount;
+  }, [edit.camera_keyframes?.length]);
+
+  // Helper pan cepat (Kiri/Tengah/Kanan) pada playhead aktif di mode keyframe
+  const handleQuickPanKeyframe = (targetX: number) => {
+    const targetTime = Math.max(0, Math.min(clipDuration, Number((previewTime || 0).toFixed(1))));
+    const kfs = edit.camera_keyframes || [];
+    const nearIdx = kfs.findIndex((k) => Math.abs(k.time - targetTime) <= 0.15);
+    let updated: CameraKeyframe[];
+    if (nearIdx !== -1) {
+      updated = kfs.map((k, idx) => (idx === nearIdx ? { ...k, x_offset: targetX } : k)).sort((a, b) => a.time - b.time);
+    } else {
+      const newKf: CameraKeyframe = {
+        id: `kf_${Date.now()}`,
+        time: targetTime,
+        x_offset: targetX,
+        y_offset: edit.main_y_offset ?? 0.5,
+        zoom: edit.main_zoom ?? 1.0,
+        easing: 'smooth',
+      };
+      updated = [...kfs, newKf].sort((a, b) => a.time - b.time);
+    }
+    setEdit({ main_x_offset: targetX, camera_keyframes: updated });
+  };
   const [loadingAiStyle, setLoadingAiStyle] = useState(false);
   const [loadingAiWords, setLoadingAiWords] = useState(false);
   const [newWordInput, setNewWordInput] = useState('');
@@ -207,8 +263,10 @@ export default function EditRightStyler() {
 
   return (
     <div
+      className="w-full overflow-hidden"
       style={{
         width: 340,
+        maxWidth: 340,
         background: '#F6F4F1',
         borderLeft: '1px solid #D3D9D6',
         display: 'flex',
@@ -273,7 +331,7 @@ export default function EditRightStyler() {
         </button>
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-5 pb-6">
         {/* ================= SECTION A: SUBTITLE STYLE ================= */}
         {activeSection === 'subtitle' && (
           <>
@@ -909,117 +967,588 @@ export default function EditRightStyler() {
             </div>
 
             {edit.layout_mode === 'fill_crop' ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16, background: '#EFF2F0', padding: 14, borderRadius: 8, border: '1px solid #D3D9D6' }}>
-                {/* Geser Horizontal */}
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#5A635F', marginBottom: 4 }}>
-                    <span>GESER HORIZONTAL (X OFFSET)</span>
-                    <span style={{ color: '#1D634E', fontWeight: 700 }}>{Math.round(edit.main_x_offset * 100)}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={edit.main_x_offset}
-                    onChange={(e) => setEdit({ main_x_offset: parseFloat(e.target.value) })}
-                    style={{ width: '100%' }}
-                  />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#5A635F', marginTop: 2 }}>
-                    <span>Kiri</span>
-                    <span>Tengah (50%)</span>
-                    <span>Kanan</span>
-                  </div>
-                </div>
-
-                {/* Geser Vertikal */}
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#5A635F', marginBottom: 4 }}>
-                    <span>GESER VERTIKAL (Y OFFSET)</span>
-                    <span style={{ color: '#1D634E', fontWeight: 700 }}>{Math.round(edit.main_y_offset * 100)}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={edit.main_y_offset}
-                    onChange={(e) => setEdit({ main_y_offset: parseFloat(e.target.value) })}
-                    style={{ width: '100%' }}
-                  />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#5A635F', marginTop: 2 }}>
-                    <span>Atas</span>
-                    <span>Tengah (50%)</span>
-                    <span>Bawah</span>
-                  </div>
-                </div>
-
-                {/* Zoom Video Utama */}
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#5A635F', marginBottom: 4 }}>
-                    <span>ZOOM GAMEPLAY / VIDEO</span>
-                    <span style={{ color: '#1D634E', fontWeight: 700 }}>{edit.main_zoom.toFixed(2)}x</span>
-                  </div>
-                  <input
-                    type="range"
-                    min={1.0}
-                    max={3.0}
-                    step={0.05}
-                    value={edit.main_zoom}
-                    onChange={(e) => setEdit({ main_zoom: parseFloat(e.target.value) })}
-                    style={{ width: '100%' }}
-                  />
-                </div>
-
-                {/* Tombol Preset Cepat Framing */}
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <div className="w-full flex flex-col gap-3">
+                {/* Sub-tab Switcher: Posisi Statis vs Keyframe Kamera */}
+                <div className="grid grid-cols-2 gap-2 w-full">
                   <button
-                    onClick={() => setEdit({ main_x_offset: 0.5, main_y_offset: 0.5 })}
-                    style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #D3D9D6', background: '#F6F4F1', color: '#111916', fontSize: 10, cursor: 'pointer' }}
+                    type="button"
+                    onClick={() => setFramingSubTab('static')}
+                    className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
+                      framingSubTab === 'static'
+                        ? 'bg-[#EFF2F0] border-[#1D634E] text-[#111916]'
+                        : 'bg-[#F6F4F1] border-[#D3D9D6] text-[#5A635F] hover:border-[#1D634E]/50'
+                    }`}
                   >
-                    Center 50%
+                    <div className="text-[11px] font-extrabold flex items-center gap-1.5">
+                      <Icon
+                        icon="solar:maximize-square-minimalistic-bold-duotone"
+                        width={14}
+                        height={14}
+                        className={framingSubTab === 'static' ? 'text-[#1D634E]' : 'text-[#5A635F]'}
+                      />
+                      Posisi Statis
+                    </div>
+                    <div className={`text-[9px] mt-1 ${framingSubTab === 'static' ? 'text-[#1D634E]' : 'text-[#5A635F]'}`}>
+                      X, Y &amp; Zoom tetap
+                    </div>
                   </button>
+
                   <button
-                    onClick={() => setEdit({ main_zoom: 1.0 })}
-                    style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #D3D9D6', background: '#F6F4F1', color: '#111916', fontSize: 10, cursor: 'pointer' }}
+                    type="button"
+                    onClick={() => setFramingSubTab('keyframes')}
+                    className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
+                      framingSubTab === 'keyframes'
+                        ? 'bg-[#EFF2F0] border-[#1D634E] text-[#111916]'
+                        : 'bg-[#F6F4F1] border-[#D3D9D6] text-[#5A635F] hover:border-[#1D634E]/50'
+                    }`}
                   >
-                    Zoom 1.0x
-                  </button>
-                  <button
-                    onClick={() => setEdit({ main_zoom: 1.25 })}
-                    style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #D3D9D6', background: '#F6F4F1', color: '#111916', fontSize: 10, cursor: 'pointer' }}
-                  >
-                    Zoom 1.25x
-                  </button>
-                  <button
-                    onClick={() => setEdit({ main_zoom: 1.5 })}
-                    style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #D3D9D6', background: '#F6F4F1', color: '#111916', fontSize: 10, cursor: 'pointer' }}
-                  >
-                    Zoom 1.5x
+                    <div className="text-[11px] font-extrabold flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Icon
+                          icon="solar:camera-bold-duotone"
+                          width={14}
+                          height={14}
+                          className={framingSubTab === 'keyframes' ? 'text-[#1D634E]' : 'text-[#5A635F]'}
+                        />
+                        Keyframe
+                      </div>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-[rgba(29,99,78,0.12)] text-[#1D634E]">
+                        {edit.camera_keyframes?.length || 0} Titik
+                      </span>
+                    </div>
+                    <div className={`text-[9px] mt-1 ${framingSubTab === 'keyframes' ? 'text-[#1D634E]' : 'text-[#5A635F]'}`}>
+                      Pan &amp; zoom dinamis
+                    </div>
                   </button>
                 </div>
 
-                {/* Reset Framing */}
-                <button
-                  onClick={() => setEdit({ main_x_offset: 0.5, main_y_offset: 0.5, main_zoom: 1.0 })}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 6,
-                    padding: '7px 12px',
-                    borderRadius: 6,
-                    border: '1px solid #D3D9D6',
-                    background: 'transparent',
-                    color: '#5A635F',
-                    fontSize: 10,
-                    cursor: 'pointer',
-                    marginTop: 4,
-                  }}
-                >
-                  <Icon icon="solar:restart-bold-duotone" width={12} height={12} />
-                  Reset Framing ke Default
-                </button>
+                {/* ================= SUB-TAB 1: POSISI STATIS ================= */}
+                {framingSubTab === 'static' && (
+                  <div className="w-full overflow-hidden flex flex-col gap-4 bg-[#EFF2F0] p-3.5 rounded-lg border border-[#D3D9D6]">
+                    {/* Geser Horizontal */}
+                    <div className="w-full flex flex-col gap-1">
+                      <div className="flex justify-between items-center text-xs text-[#5A635F]">
+                        <span className="font-bold text-[10px] tracking-wide">GESER HORIZONTAL (X OFFSET)</span>
+                        <span className="text-[#1D634E] font-bold text-xs">{Math.round(edit.main_x_offset * 100)}%</span>
+                      </div>
+                      <div className="flex items-center gap-2 w-full">
+                        <span className="w-14 shrink-0 text-xs text-[#5A635F]">Posisi X</span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          value={edit.main_x_offset}
+                          onChange={(e) => updateMainFraming({ main_x_offset: parseFloat(e.target.value) })}
+                          className="flex-1 min-w-0 accent-[#1D634E]"
+                        />
+                        <div className="flex items-center gap-1 shrink-0">
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            step={1}
+                            value={Math.round(edit.main_x_offset * 100)}
+                            onChange={(e) => {
+                              const val = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0));
+                              updateMainFraming({ main_x_offset: val / 100 });
+                            }}
+                            className="w-16 shrink-0 px-1.5 py-0.5 text-xs text-right tabular-nums bg-[#EFF2F0] border border-[#D3D9D6] rounded-md text-[#111916]"
+                          />
+                          <span className="text-xs text-[#5A635F]">%</span>
+                        </div>
+                      </div>
+                      <div className="flex justify-between text-[10px] text-[#5A635F] pl-16 pr-8">
+                        <span>Kiri</span>
+                        <span>Tengah (50%)</span>
+                        <span>Kanan</span>
+                      </div>
+                    </div>
+
+                    {/* Geser Vertikal */}
+                    <div className="w-full flex flex-col gap-1">
+                      <div className="flex justify-between items-center text-xs text-[#5A635F]">
+                        <span className="font-bold text-[10px] tracking-wide">GESER VERTIKAL (Y OFFSET)</span>
+                        <span className="text-[#1D634E] font-bold text-xs">{Math.round(edit.main_y_offset * 100)}%</span>
+                      </div>
+                      <div className="flex items-center gap-2 w-full">
+                        <span className="w-14 shrink-0 text-xs text-[#5A635F]">Posisi Y</span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          value={edit.main_y_offset}
+                          onChange={(e) => updateMainFraming({ main_y_offset: parseFloat(e.target.value) })}
+                          className="flex-1 min-w-0 accent-[#1D634E]"
+                        />
+                        <div className="flex items-center gap-1 shrink-0">
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            step={1}
+                            value={Math.round(edit.main_y_offset * 100)}
+                            onChange={(e) => {
+                              const val = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0));
+                              updateMainFraming({ main_y_offset: val / 100 });
+                            }}
+                            className="w-16 shrink-0 px-1.5 py-0.5 text-xs text-right tabular-nums bg-[#EFF2F0] border border-[#D3D9D6] rounded-md text-[#111916]"
+                          />
+                          <span className="text-xs text-[#5A635F]">%</span>
+                        </div>
+                      </div>
+                      <div className="flex justify-between text-[10px] text-[#5A635F] pl-16 pr-8">
+                        <span>Atas</span>
+                        <span>Tengah (50%)</span>
+                        <span>Bawah</span>
+                      </div>
+                    </div>
+
+                    {/* Zoom Video Utama */}
+                    <div className="w-full flex flex-col gap-1">
+                      <div className="flex justify-between items-center text-xs text-[#5A635F]">
+                        <span className="font-bold text-[10px] tracking-wide">ZOOM GAMEPLAY / VIDEO</span>
+                        <span className="text-[#1D634E] font-bold text-xs">{edit.main_zoom.toFixed(2)}x</span>
+                      </div>
+                      <div className="flex items-center gap-2 w-full">
+                        <span className="w-14 shrink-0 text-xs text-[#5A635F]">Zoom</span>
+                        <input
+                          type="range"
+                          min={1.0}
+                          max={3.0}
+                          step={0.05}
+                          value={edit.main_zoom}
+                          onChange={(e) => updateMainFraming({ main_zoom: parseFloat(e.target.value) })}
+                          className="flex-1 min-w-0 accent-[#1D634E]"
+                        />
+                        <div className="flex items-center gap-1 shrink-0">
+                          <input
+                            type="number"
+                            min={1.0}
+                            max={3.0}
+                            step={0.05}
+                            value={edit.main_zoom}
+                            onChange={(e) => {
+                              const val = Math.max(1.0, Math.min(3.0, parseFloat(e.target.value) || 1.0));
+                              updateMainFraming({ main_zoom: parseFloat(val.toFixed(2)) });
+                            }}
+                            className="w-16 shrink-0 px-1.5 py-0.5 text-xs text-right tabular-nums bg-[#EFF2F0] border border-[#D3D9D6] rounded-md text-[#111916]"
+                          />
+                          <span className="text-xs text-[#5A635F]">x</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Tombol Preset Cepat Framing */}
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        onClick={() => updateMainFraming({ main_x_offset: 0.5, main_y_offset: 0.5 })}
+                        style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #D3D9D6', background: '#F6F4F1', color: '#111916', fontSize: 10, cursor: 'pointer' }}
+                      >
+                        Center 50%
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateMainFraming({ main_zoom: 1.0 })}
+                        style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #D3D9D6', background: '#F6F4F1', color: '#111916', fontSize: 10, cursor: 'pointer' }}
+                      >
+                        Zoom 1.0x
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateMainFraming({ main_zoom: 1.25 })}
+                        style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #D3D9D6', background: '#F6F4F1', color: '#111916', fontSize: 10, cursor: 'pointer' }}
+                      >
+                        Zoom 1.25x
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateMainFraming({ main_zoom: 1.5 })}
+                        style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #D3D9D6', background: '#F6F4F1', color: '#111916', fontSize: 10, cursor: 'pointer' }}
+                      >
+                        Zoom 1.5x
+                      </button>
+                    </div>
+
+                    {/* Reset Framing */}
+                    <button
+                      type="button"
+                      onClick={() => setEdit({ main_x_offset: 0.5, main_y_offset: 0.5, main_zoom: 1.0 })}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        padding: '7px 12px',
+                        borderRadius: 6,
+                        border: '1px solid #D3D9D6',
+                        background: 'transparent',
+                        color: '#5A635F',
+                        fontSize: 10,
+                        cursor: 'pointer',
+                        marginTop: 4,
+                      }}
+                    >
+                      <Icon icon="solar:restart-bold-duotone" width={12} height={12} />
+                      Reset Framing ke Default
+                    </button>
+                  </div>
+                )}
+
+                {/* ================= SUB-TAB 2: KEYFRAME KAMERA ================= */}
+                {framingSubTab === 'keyframes' && (
+                  <div className="w-full overflow-hidden flex flex-col gap-3.5 bg-[#EFF2F0] p-3.5 rounded-lg border border-[#D3D9D6]">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Icon icon="solar:camera-bold-duotone" width={16} height={16} className="text-[#1D634E]" />
+                        <span className="text-[11px] font-extrabold text-[#111916]">
+                          KEYFRAME KAMERA (PAN &amp; ZOOM)
+                        </span>
+                      </div>
+                      <span className="text-[10px] bg-[rgba(29,99,78,0.12)] text-[#1D634E] px-2 py-0.5 rounded font-bold">
+                        {edit.camera_keyframes?.length || 0} Titik
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-[#5A635F] leading-relaxed m-0">
+                      Buat pergerakan kamera dinamis (pan horizontal/vertikal &amp; zoom) yang berpindah mengikuti alur video.
+                    </p>
+
+                    {/* Tombol Utama CTA Tambah Keyframe */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const targetTime = Math.max(0, Math.min(clipDuration, Number((previewTime || 0).toFixed(1))));
+                        const newKf: CameraKeyframe = {
+                          id: `kf_${Date.now()}`,
+                          time: targetTime,
+                          x_offset: edit.main_x_offset ?? 0.5,
+                          y_offset: edit.main_y_offset ?? 0.5,
+                          zoom: edit.main_zoom ?? 1.0,
+                          easing: 'smooth',
+                        };
+                        const existing = (edit.camera_keyframes || []).filter((k) => Math.abs(k.time - targetTime) > 0.05);
+                        const updated = [...existing, newKf].sort((a, b) => a.time - b.time);
+                        setEdit({ camera_keyframes: updated });
+                      }}
+                      className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-[#1D634E] text-[#F6F4F1] text-xs font-bold hover:bg-[#16503e] transition-colors cursor-pointer border-none shadow-sm"
+                    >
+                      <Icon icon="solar:add-circle-bold-duotone" width={16} height={16} />
+                      + Tambah Keyframe ({(previewTime || 0).toFixed(1)}s)
+                    </button>
+
+                    {/* Tombol Preset Pan Cepat: 3 Kolom */}
+                    <div className="w-full flex flex-col gap-1.5">
+                      <span className="text-[10px] font-bold text-[#5A635F] tracking-wide">
+                        PAN CEPAT KE PLAYHEAD ({(previewTime || 0).toFixed(1)}s)
+                      </span>
+                      <div className="grid grid-cols-3 gap-1.5 w-full">
+                        <button
+                          type="button"
+                          onClick={() => handleQuickPanKeyframe(0.15)}
+                          title="Setel atau tambah keyframe di sisi kiri (15%) pada detik ini"
+                          className="flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md border border-[#D3D9D6] bg-[#F6F4F1] hover:bg-[#EFF2F0] text-[#111916] text-[11px] font-bold cursor-pointer transition-colors"
+                        >
+                          <Icon icon="solar:arrow-left-bold-duotone" width={13} height={13} className="text-[#1D634E]" />
+                          Kiri (15%)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleQuickPanKeyframe(0.50)}
+                          title="Setel atau tambah keyframe di posisi tengah (50%) pada detik ini"
+                          className="flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md border border-[#D3D9D6] bg-[#F6F4F1] hover:bg-[#EFF2F0] text-[#111916] text-[11px] font-bold cursor-pointer transition-colors"
+                        >
+                          <Icon icon="solar:align-horizontal-center-bold-duotone" width={13} height={13} className="text-[#1D634E]" />
+                          Tengah (50%)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleQuickPanKeyframe(0.85)}
+                          title="Setel atau tambah keyframe di sisi kanan (85%) pada detik ini"
+                          className="flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md border border-[#D3D9D6] bg-[#F6F4F1] hover:bg-[#EFF2F0] text-[#111916] text-[11px] font-bold cursor-pointer transition-colors"
+                        >
+                          <Icon icon="solar:arrow-right-bold-duotone" width={13} height={13} className="text-[#1D634E]" />
+                          Kanan (85%)
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Preset Gerakan Kamera Otomatis */}
+                    <div className="w-full flex flex-col gap-1.5">
+                      <span className="text-[10px] font-bold text-[#5A635F] tracking-wide">
+                        PRESET GERAKAN LENGKAP
+                      </span>
+                      <div className="flex gap-1.5 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const dur = clipDuration;
+                            const kfs: CameraKeyframe[] = [
+                              { id: `kf_${Date.now()}_1`, time: 0, x_offset: 0.15, y_offset: 0.5, zoom: 1.0, easing: 'smooth' },
+                              { id: `kf_${Date.now()}_2`, time: parseFloat(dur.toFixed(2)), x_offset: 0.85, y_offset: 0.5, zoom: 1.0, easing: 'smooth' },
+                            ];
+                            setEdit({ camera_keyframes: kfs });
+                          }}
+                          title="Kamera bergeser mulus dari kiri ke kanan"
+                          className="flex items-center gap-1 py-1.5 px-2.5 rounded-md border border-[#D3D9D6] bg-[#F6F4F1] hover:bg-[#EFF2F0] text-[#111916] text-[10px] font-bold cursor-pointer transition-colors"
+                        >
+                          <Icon icon="solar:arrow-right-bold-duotone" width={12} height={12} className="text-[#1D634E]" />
+                          Pan Kiri ➔ Kanan
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const dur = clipDuration;
+                            const kfs: CameraKeyframe[] = [
+                              { id: `kf_${Date.now()}_1`, time: 0, x_offset: 0.85, y_offset: 0.5, zoom: 1.0, easing: 'smooth' },
+                              { id: `kf_${Date.now()}_2`, time: parseFloat(dur.toFixed(2)), x_offset: 0.15, y_offset: 0.5, zoom: 1.0, easing: 'smooth' },
+                            ];
+                            setEdit({ camera_keyframes: kfs });
+                          }}
+                          title="Kamera bergeser mulus dari kanan ke kiri"
+                          className="flex items-center gap-1 py-1.5 px-2.5 rounded-md border border-[#D3D9D6] bg-[#F6F4F1] hover:bg-[#EFF2F0] text-[#111916] text-[10px] font-bold cursor-pointer transition-colors"
+                        >
+                          <Icon icon="solar:arrow-left-bold-duotone" width={12} height={12} className="text-[#1D634E]" />
+                          Pan Kanan ➔ Kiri
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const dur = clipDuration;
+                            const mid = parseFloat((dur / 2).toFixed(2));
+                            const kfs: CameraKeyframe[] = [
+                              { id: `kf_${Date.now()}_1`, time: 0, x_offset: 0.5, y_offset: 0.5, zoom: 1.0, easing: 'smooth' },
+                              { id: `kf_${Date.now()}_2`, time: mid, x_offset: 0.5, y_offset: 0.5, zoom: 1.45, easing: 'smooth' },
+                              { id: `kf_${Date.now()}_3`, time: parseFloat(dur.toFixed(2)), x_offset: 0.5, y_offset: 0.5, zoom: 1.0, easing: 'smooth' },
+                            ];
+                            setEdit({ camera_keyframes: kfs });
+                          }}
+                          title="Zoom masuk dramatis di tengah klip lalu zoom out"
+                          className="flex items-center gap-1 py-1.5 px-2.5 rounded-md border border-[#D3D9D6] bg-[#F6F4F1] hover:bg-[#EFF2F0] text-[#111916] text-[10px] font-bold cursor-pointer transition-colors"
+                        >
+                          <Icon icon="solar:magnifer-zoom-in-bold-duotone" width={12} height={12} className="text-[#1D634E]" />
+                          Punch Zoom In
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* List / Empty State Keyframe */}
+                    {(!edit.camera_keyframes || edit.camera_keyframes.length === 0) ? (
+                      <div className="flex flex-col items-center justify-center p-4 rounded-lg border border-dashed border-[#D3D9D6] bg-[#F6F4F1] text-center gap-2 mt-1">
+                        <div className="w-8 h-8 rounded-full bg-[rgba(29,99,78,0.1)] flex items-center justify-center text-[#1D634E]">
+                          <Icon icon="solar:camera-bold-duotone" width={18} height={18} />
+                        </div>
+                        <div className="text-xs font-bold text-[#111916]">Belum Ada Keyframe Kamera</div>
+                        <p className="text-[11px] text-[#5A635F] max-w-xs leading-relaxed m-0">
+                          Klik tombol <strong className="text-[#1D634E]">+ Tambah Keyframe</strong> atau gunakan tombol preset <strong className="text-[#1D634E]">Pan Cepat (Kiri, Tengah, Kanan)</strong> di atas untuk mengarahkan kamera mengikuti objek.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="w-full overflow-hidden flex flex-col gap-2 mt-1">
+                        <div className="flex items-center justify-between px-0.5">
+                          <span className="text-[10px] font-bold text-[#5A635F] tracking-wide">
+                            DAFTAR TITIK KEYFRAME
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setEdit({ camera_keyframes: [] })}
+                            title="Hapus semua keyframe"
+                            className="flex items-center gap-1 text-[11px] font-bold text-[#B54329] hover:bg-[rgba(181,67,41,0.1)] px-2 py-0.5 rounded cursor-pointer transition-colors border-none bg-transparent"
+                          >
+                            <Icon icon="solar:trash-bin-trash-bold-duotone" width={13} height={13} />
+                            Hapus Semua
+                          </button>
+                        </div>
+
+                        {edit.camera_keyframes.map((kf, idx) => {
+                          const updateKf = (patch: Partial<CameraKeyframe>) => {
+                            const next = (edit.camera_keyframes || [])
+                              .map((k) => (k.id === kf.id ? { ...k, ...patch } : k))
+                              .sort((a, b) => a.time - b.time);
+                            setEdit({ camera_keyframes: next });
+                          };
+                          const removeKf = () => {
+                            const next = (edit.camera_keyframes || []).filter((k) => k.id !== kf.id);
+                            setEdit({ camera_keyframes: next });
+                          };
+
+                          const isCurrentActive = Math.abs(kf.time - (previewTime || 0)) <= 0.15;
+
+                          return (
+                            <div
+                              key={kf.id}
+                              className={`w-full overflow-hidden flex flex-col gap-2.5 p-2.5 rounded-lg border transition-all ${
+                                isCurrentActive
+                                  ? 'bg-[#EFF2F0] border-[#1D634E] shadow-[0_0_0_1px_rgba(29,99,78,0.25)]'
+                                  : 'bg-[#F6F4F1] border-[#D3D9D6]'
+                              }`}
+                            >
+                              {/* Baris 1 (Header Keyframe) */}
+                              <div className="flex flex-wrap items-center justify-between gap-1.5 w-full">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[10px] font-extrabold text-[#1D634E] bg-[rgba(29,99,78,0.12)] px-1.5 py-0.5 rounded">
+                                    #{idx + 1}
+                                  </span>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={clipDuration}
+                                    step={0.1}
+                                    value={kf.time}
+                                    onChange={(e) => {
+                                      const val = parseFloat(e.target.value);
+                                      if (!isNaN(val)) {
+                                        updateKf({ time: Math.max(0, Math.min(clipDuration, parseFloat(val.toFixed(2)))) });
+                                      }
+                                    }}
+                                    onBlur={(e) => {
+                                      const val = parseFloat(e.target.value) || 0;
+                                      updateKf({ time: Math.max(0, Math.min(clipDuration, parseFloat(val.toFixed(2)))) });
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        (e.target as HTMLInputElement).blur();
+                                      }
+                                    }}
+                                    className="w-14 px-1.5 py-0.5 text-xs tabular-nums bg-[#EFF2F0] border border-[#D3D9D6] rounded-md text-[#111916] font-semibold"
+                                  />
+                                  <span className="text-xs text-[#5A635F]">s</span>
+                                </div>
+
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => requestSeek(kf.time)}
+                                    title="Lompat ke detik ini"
+                                    className="p-1 rounded bg-[#EFF2F0] border border-[#D3D9D6] text-[#1D634E] hover:bg-[#D3D9D6] transition-colors cursor-pointer flex items-center justify-center"
+                                  >
+                                    <Icon icon="solar:play-bold-duotone" width={12} height={12} />
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => updateKf({ easing: kf.easing === 'smooth' ? 'hold' : 'smooth' })}
+                                    title={kf.easing === 'smooth' ? 'Pan mulus (interpolasi)' : 'Jump cut instan'}
+                                    className={`px-2 py-0.5 text-[11px] font-bold rounded-md border cursor-pointer transition-colors ${
+                                      kf.easing === 'smooth'
+                                        ? 'bg-[rgba(29,99,78,0.12)] border-[#1D634E] text-[#1D634E]'
+                                        : 'bg-[#EFF2F0] border-[#D3D9D6] text-[#5A635F]'
+                                    }`}
+                                  >
+                                    {kf.easing === 'smooth' ? 'Smooth' : 'Cut'}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={removeKf}
+                                    title="Hapus keyframe ini"
+                                    className="p-1 text-[#B54329] hover:bg-[rgba(181,67,41,0.1)] rounded cursor-pointer transition-colors flex items-center justify-center border-none bg-transparent"
+                                  >
+                                    <Icon icon="solar:trash-bin-trash-bold-duotone" width={14} height={14} />
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Baris 2 (Kontrol Posisi X, Posisi Y, Zoom) */}
+                              <div className="flex flex-col gap-2 w-full">
+                                {/* Posisi X */}
+                                <div className="flex items-center gap-2 w-full">
+                                  <span className="w-14 shrink-0 text-xs text-[#5A635F]">Posisi X</span>
+                                  <input
+                                    type="range"
+                                    min={0}
+                                    max={1}
+                                    step={0.01}
+                                    value={kf.x_offset}
+                                    onChange={(e) => updateKf({ x_offset: parseFloat(e.target.value) })}
+                                    className="flex-1 min-w-0 accent-[#1D634E]"
+                                  />
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={100}
+                                      step={1}
+                                      value={Math.round(kf.x_offset * 100)}
+                                      onChange={(e) => {
+                                        const val = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0));
+                                        updateKf({ x_offset: val / 100 });
+                                      }}
+                                      className="w-16 shrink-0 px-1.5 py-0.5 text-xs text-right tabular-nums bg-[#EFF2F0] border border-[#D3D9D6] rounded-md text-[#111916]"
+                                    />
+                                    <span className="text-xs text-[#5A635F]">%</span>
+                                  </div>
+                                </div>
+
+                                {/* Posisi Y */}
+                                <div className="flex items-center gap-2 w-full">
+                                  <span className="w-14 shrink-0 text-xs text-[#5A635F]">Posisi Y</span>
+                                  <input
+                                    type="range"
+                                    min={0}
+                                    max={1}
+                                    step={0.01}
+                                    value={kf.y_offset}
+                                    onChange={(e) => updateKf({ y_offset: parseFloat(e.target.value) })}
+                                    className="flex-1 min-w-0 accent-[#1D634E]"
+                                  />
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={100}
+                                      step={1}
+                                      value={Math.round(kf.y_offset * 100)}
+                                      onChange={(e) => {
+                                        const val = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0));
+                                        updateKf({ y_offset: val / 100 });
+                                      }}
+                                      className="w-16 shrink-0 px-1.5 py-0.5 text-xs text-right tabular-nums bg-[#EFF2F0] border border-[#D3D9D6] rounded-md text-[#111916]"
+                                    />
+                                    <span className="text-xs text-[#5A635F]">%</span>
+                                  </div>
+                                </div>
+
+                                {/* Zoom */}
+                                <div className="flex items-center gap-2 w-full">
+                                  <span className="w-14 shrink-0 text-xs text-[#5A635F]">Zoom</span>
+                                  <input
+                                    type="range"
+                                    min={1.0}
+                                    max={3.0}
+                                    step={0.05}
+                                    value={kf.zoom}
+                                    onChange={(e) => updateKf({ zoom: parseFloat(e.target.value) })}
+                                    className="flex-1 min-w-0 accent-[#1D634E]"
+                                  />
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <input
+                                      type="number"
+                                      min={1.0}
+                                      max={3.0}
+                                      step={0.05}
+                                      value={kf.zoom}
+                                      onChange={(e) => {
+                                        const val = Math.max(1.0, Math.min(3.0, parseFloat(e.target.value) || 1.0));
+                                        updateKf({ zoom: parseFloat(val.toFixed(2)) });
+                                      }}
+                                      className="w-16 shrink-0 px-1.5 py-0.5 text-xs text-right tabular-nums bg-[#EFF2F0] border border-[#D3D9D6] rounded-md text-[#111916]"
+                                    />
+                                    <span className="text-xs text-[#5A635F]">x</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
               <div style={{ background: '#EFF2F0', padding: 14, borderRadius: 8, border: '1px solid #D3D9D6', color: '#5A635F', fontSize: 11, lineHeight: 1.6 }}>

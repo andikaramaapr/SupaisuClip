@@ -128,6 +128,85 @@ def compute_main_crop(
     return {"x": x, "y": y, "w": cw, "h": ch}
 
 
+def build_camera_keyframes_crop_filter(
+    src_w: int,
+    src_h: int,
+    keyframes: list[dict],
+    main_x_offset: float = 0.5,
+    main_y_offset: float = 0.5,
+    main_zoom: float = 1.0,
+) -> tuple[int, int, str, str]:
+    """
+    Menghasilkan (cw, ch, x_expr, y_expr) untuk filter crop FFmpeg dinamis berbasis keyframe.
+    Mendukung interpolasi 'smooth' (cubic smoothstep: u*u*(3-2*u)) dan 'hold' (jump cut).
+    Semua tanda koma di dalam x_expr dan y_expr di-escape menjadi '\\,' agar tidak memecah filter FFmpeg.
+    """
+    valid_kfs = [k for k in keyframes if isinstance(k, dict)]
+    valid_kfs.sort(key=lambda k: float(k.get("time", 0.0)))
+
+    if not valid_kfs:
+        c = compute_main_crop(src_w, src_h, main_x_offset, main_y_offset, main_zoom)
+        return c["w"], c["h"], str(c["x"]), str(c["y"])
+
+    base_zoom = float(valid_kfs[0].get("zoom", main_zoom))
+    c = compute_main_crop(src_w, src_h, 0.5, 0.5, base_zoom)
+    cw, ch = c["w"], c["h"]
+    max_x = max(0, src_w - cw)
+    max_y = max(0, src_h - ch)
+
+    if len(valid_kfs) == 1 or (max_x == 0 and max_y == 0):
+        x_val = int(max_x * _clamp(float(valid_kfs[0].get("x_offset", main_x_offset)), 0.0, 1.0))
+        y_val = int(max_y * _clamp(float(valid_kfs[0].get("y_offset", main_y_offset)), 0.0, 1.0))
+        return cw, ch, str(x_val), str(y_val)
+
+    # Konstruksi nested if expression terbalik
+    last_x = _clamp(float(valid_kfs[-1].get("x_offset", main_x_offset)), 0.0, 1.0)
+    last_y = _clamp(float(valid_kfs[-1].get("y_offset", main_y_offset)), 0.0, 1.0)
+    expr_x = f"{last_x:.4f}"
+    expr_y = f"{last_y:.4f}"
+
+    for i in range(len(valid_kfs) - 2, -1, -1):
+        k1 = valid_kfs[i]
+        k2 = valid_kfs[i + 1]
+        t1 = max(0.0, float(k1.get("time", 0.0)))
+        t2 = max(t1 + 0.01, float(k2.get("time", 0.0)))
+        x1 = _clamp(float(k1.get("x_offset", main_x_offset)), 0.0, 1.0)
+        x2 = _clamp(float(k2.get("x_offset", main_x_offset)), 0.0, 1.0)
+        y1 = _clamp(float(k1.get("y_offset", main_y_offset)), 0.0, 1.0)
+        y2 = _clamp(float(k2.get("y_offset", main_y_offset)), 0.0, 1.0)
+        easing = k1.get("easing", "smooth")
+        dt = t2 - t1
+
+        if easing == "hold":
+            seg_x = f"{x1:.4f}"
+            seg_y = f"{y1:.4f}"
+        else:
+            # Kurva smoothstep: u = clip((t - t_prev) / (t_next - t_prev), 0, 1)
+            # s = u * u * (3 - 2 * u)
+            u = f"clip((t-{t1:.3f})/{dt:.3f},0,1)"
+            s = f"({u}*{u}*(3-2*{u}))"
+            seg_x = f"({x1:.4f}+({x2 - x1:.4f})*{s})"
+            seg_y = f"({y1:.4f}+({y2 - y1:.4f})*{s})"
+
+        expr_x = f"if(lt(t,{t2:.3f}),{seg_x},{expr_x})"
+        expr_y = f"if(lt(t,{t2:.3f}),{seg_y},{expr_y})"
+
+    first_t = float(valid_kfs[0].get("time", 0.0))
+    if first_t > 0:
+        first_x = _clamp(float(valid_kfs[0].get("x_offset", main_x_offset)), 0.0, 1.0)
+        first_y = _clamp(float(valid_kfs[0].get("y_offset", main_y_offset)), 0.0, 1.0)
+        expr_x = f"if(lt(t,{first_t:.3f}),{first_x:.4f},{expr_x})"
+        expr_y = f"if(lt(t,{first_t:.3f}),{first_y:.4f},{expr_y})"
+
+    final_x = f"clip({max_x}*({expr_x}),0,{max_x})"
+    final_y = f"clip({max_y}*({expr_y}),0,{max_y})"
+
+    # Escape SEMUA koma di dalam ekspresi menjadi \, agar tidak memecah rantai filter FFmpeg
+    escaped_x = final_x.replace(",", "\\,")
+    escaped_y = final_y.replace(",", "\\,")
+    return cw, ch, escaped_x, escaped_y
+
+
 def compute_webcam_src(src_w: int, src_h: int, src: dict) -> dict:
     """webcam_src rasio 0-1 -> kotak piksel di video sumber (genap, di dalam frame)."""
     x = int(_clamp(src["x"], 0.0, 1.0) * src_w)
@@ -168,20 +247,22 @@ def _amix_has_normalize() -> bool:
 # ---------------------------------------------------- filter graph ----------
 def build_filter_graph(
     meta: dict,
-    ass_path: Path,
+    ass_path: Path | None,
     fonts_dir: Path,
     *,
     layout_mode: str = "fill_crop",
     main_x_offset: float = 0.5,
     main_y_offset: float = 0.5,
     main_zoom: float = 1.0,
+    camera_keyframes: list[dict] | None = None,
     webcam_enabled: bool = False,
     webcam_src: dict | None = None,
     webcam_dst: dict | None = None,
     webcam_style: dict | None = None,
     resolution: int = 1080,
+    subtitle_style: str | None = None,
 ) -> str:
-    """Rangkai filter_complex video. Output berlabel [vout]. Fungsi murni (mudah dites)."""
+    """Rangkai filter_complex video. Output berlabel [v_out]. Fungsi murni (mudah dites)."""
     src_w, src_h = meta["width"], meta["height"]
     use_cam = bool(webcam_enabled and webcam_src and webcam_dst)
     blur = layout_mode == "blur_bg"
@@ -205,11 +286,20 @@ def build_filter_graph(
         parts.append(f"{src('fg')}scale={CANVAS_W}:{CANVAS_H}:force_original_aspect_ratio=decrease[fgs]")
         parts.append("[bgb][fgs]overlay=(W-w)/2:(H-h)/2[base]")
     else:
-        c = compute_main_crop(src_w, src_h, main_x_offset, main_y_offset, main_zoom)
-        parts.append(
-            f"{src('main')}crop={c['w']}:{c['h']}:{c['x']}:{c['y']},"
-            f"scale={CANVAS_W}:{CANVAS_H}:flags=lanczos,setsar=1[base]"
-        )
+        if camera_keyframes and len(camera_keyframes) > 0:
+            cw, ch, x_expr, y_expr = build_camera_keyframes_crop_filter(
+                src_w, src_h, camera_keyframes, main_x_offset, main_y_offset, main_zoom
+            )
+            parts.append(
+                f"{src('main')}crop=w={cw}:h={ch}:x='{x_expr}':y='{y_expr}',"
+                f"scale={CANVAS_W}:{CANVAS_H}:flags=lanczos,setsar=1[base]"
+            )
+        else:
+            c = compute_main_crop(src_w, src_h, main_x_offset, main_y_offset, main_zoom)
+            parts.append(
+                f"{src('main')}crop={c['w']}:{c['h']}:{c['x']}:{c['y']},"
+                f"scale={CANVAS_W}:{CANVAS_H}:flags=lanczos,setsar=1[base]"
+            )
     cur = "[base]"
 
     # 2. Webcam popout (crop dari video yang SAMA)
@@ -233,14 +323,26 @@ def build_filter_graph(
         parts.append(f"{cur}[camv]overlay={d['x']}:{d['y']}:format=auto[with_cam]")
         cur = "[with_cam]"
 
-    # 3. ASS (dihitung di 1080x1920), baru kemudian di-scale kalau resolusi lebih kecil
-    ass_esc, fonts_esc = ff_escape_path(ass_path), ff_escape_path(fonts_dir)
+    # 3. Target resolution scaling (jika resolusi output berbeda dengan kanvas 1080x1920)
     out_w, out_h = RESOLUTIONS.get(resolution, RESOLUTIONS[1080])
-    if (out_w, out_h) == (CANVAS_W, CANVAS_H):
-        parts.append(f"{cur}ass='{ass_esc}':fontsdir='{fonts_esc}'[vout]")
+    if (out_w, out_h) != (CANVAS_W, CANVAS_H):
+        parts.append(f"{cur}scale={out_w}:{out_h}:flags=lanczos[v_scaled]")
+        cur = "[v_scaled]"
+
+    # 4. Burn-in ASS Subtitle sebagai TAHAP VIDEO PALING AKHIR menuju pad [v_out]
+    has_sub = False
+    is_none = bool(subtitle_style and subtitle_style.strip().lower() == "none")
+    if not is_none and ass_path:
+        ass_p = Path(ass_path)
+        if ass_p.exists() and ass_p.stat().st_size > 0:
+            has_sub = True
+
+    if has_sub:
+        ass_esc = ff_escape_path(ass_path)
+        fonts_esc = ff_escape_path(fonts_dir)
+        parts.append(f"{cur}ass='{ass_esc}':fontsdir='{fonts_esc}'[v_out]")
     else:
-        parts.append(f"{cur}ass='{ass_esc}':fontsdir='{fonts_esc}'[asv]")
-        parts.append(f"[asv]scale={out_w}:{out_h}:flags=lanczos[vout]")
+        parts.append(f"{cur}null[v_out]")
     return ";".join(parts)
 
 
@@ -315,10 +417,12 @@ def render_vertical_clip(
     main_x_offset: float = 0.5,
     main_y_offset: float = 0.5,
     main_zoom: float = 1.0,
+    camera_keyframes: list[dict] | None = None,
     webcam_enabled: bool = False,
     webcam_src: dict | None = None,
     webcam_dst: dict | None = None,
     webcam_style: dict | None = None,
+    subtitle_style: str | None = None,
     sfx_path: Path | None = None,
     sfx_volume: float = 0.85,
     sfx_start_sec: float = 0.0,
@@ -351,8 +455,9 @@ def render_vertical_clip(
     video_graph = build_filter_graph(
         meta, ass_path, fonts_dir,
         layout_mode=layout_mode, main_x_offset=main_x_offset, main_y_offset=main_y_offset,
-        main_zoom=main_zoom, webcam_enabled=webcam_enabled, webcam_src=webcam_src,
+        main_zoom=main_zoom, camera_keyframes=camera_keyframes, webcam_enabled=webcam_enabled, webcam_src=webcam_src,
         webcam_dst=webcam_dst, webcam_style=webcam_style, resolution=resolution,
+        subtitle_style=subtitle_style,
     )
     use_sfx = bool(sfx_path and Path(sfx_path).exists())
     audio_graph, audio_map = build_audio_graph(meta["has_audio"], use_sfx, sfx_volume, sfx_start_sec)
@@ -374,13 +479,16 @@ def render_vertical_clip(
                "-ss", f"{cs:.3f}", "-t", f"{dur:.3f}", "-i", str(video_path)]
         if use_sfx:
             cmd += ["-i", str(sfx_path)]
-        cmd += ["-filter_complex", graph, "-map", "[vout]", *audio_map]
+        cmd += ["-filter_complex", graph, "-map", "[v_out]", *audio_map]
         if fps:
             cmd += ["-r", str(int(fps))]
         cmd += [*_encoder_args(enc, int(crf), resolution, fast), "-pix_fmt", "yuv420p"]
         if audio_map != ["-an"]:
             cmd += ["-c:a", "aac", "-b:a", "192k"]
         cmd += ["-movflags", "+faststart", "-t", f"{dur:.3f}", str(output_path)]
+
+        print(f"\n[FFMPEG COMMAND] Encoder: {enc}")
+        print(" ".join(f'"{c}"' if (" " in c or ";" in c) else c for c in cmd))
 
         ok, err = _run_ffmpeg_with_progress(cmd, dur, progress_cb)
         if ok:

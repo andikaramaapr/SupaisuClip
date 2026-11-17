@@ -111,6 +111,15 @@ class WebcamStyle(BaseModel):
     radius_px: int = Field(DEFAULT_WEBCAM_STYLE["radius_px"], ge=0, le=400)
 
 
+class CameraKeyframe(BaseModel):
+    id: str = ""
+    time: float = Field(0.0, ge=0)
+    x_offset: float = Field(0.5, ge=0, le=1)
+    y_offset: float = Field(0.5, ge=0, le=1)
+    zoom: float = Field(1.0, ge=1.0, le=4.0)
+    easing: Literal["smooth", "hold"] = "smooth"
+
+
 class RenderParams(BaseModel):
     """SATU sumber kebenaran untuk render DAN preview ASS. Frontend EditState harus identik dengan ini."""
     video_filename: str = ""
@@ -129,6 +138,9 @@ class RenderParams(BaseModel):
     highlight_words: list[str] = Field(default_factory=list, max_length=200)
     highlight_color: str = "#FF3B3B"
     letter_style: Literal["uppercase", "title", "lowercase"] = "uppercase"
+    subtitle_style: str | None = None
+    subtitle_position: int | None = None
+    cues: list[dict] = Field(default_factory=list)
     # --- hook ---
     hook_text: str = ""
     hook_duration_sec: float = Field(3.0, ge=0)   # 0 = seluruh klip
@@ -145,6 +157,7 @@ class RenderParams(BaseModel):
     main_x_offset: float = Field(0.5, ge=0, le=1)
     main_y_offset: float = Field(0.5, ge=0, le=1)
     main_zoom: float = Field(1.0, ge=1.0, le=4.0)
+    camera_keyframes: list[CameraKeyframe] = Field(default_factory=list)
     webcam_enabled: bool = False
     webcam_src: Rect | None = None        # rasio 0-1 terhadap video sumber
     webcam_dst: Rect | None = None        # piksel canvas 1080x1920 (kotak luar, termasuk border)
@@ -185,6 +198,11 @@ class RenderParams(BaseModel):
             raise ValueError("webcam_enabled=true butuh webcam_src dan webcam_dst")
         if self.clip_end is not None and self.clip_end <= self.clip_start:
             raise ValueError("clip_end harus lebih besar dari clip_start")
+        # Pastikan style_key tidak kosong/"none" jika ada subtitle
+        if not self.style_key or self.style_key.strip().lower() == "none":
+            self.style_key = "viral_pop"
+        if self.subtitle_position is not None and self.subtitle_margin_v is None:
+            self.subtitle_margin_v = self.subtitle_position
         return self
 
 
@@ -788,14 +806,9 @@ def execute_render(p: RenderParams, progress_cb=None) -> dict:
         # karena video yang diunduh sudah dimulai dari detik 0 (bukan dari cs).
         if p.srt_text and not p.srt_relative:
             entries = parse_srt(p.srt_text)
-            sliced = slice_srt(entries, cs, ce)   # hanya cue dalam rentang klip
-            # Geser timestamp ke 0 (relatif klip)
-            shifted = [
-                {**e, "start": round(e["start"] - cs, 3), "end": round(e["end"] - cs, 3)}
-                for e in sliced
-            ]
-            # Import to_srt dari srt_utils – sudah diimport di atas
-            p.srt_text = to_srt(shifted) if shifted else p.srt_text
+            # slice_srt sudah menggeser timestamp ke relatif [0..clip_dur] – JANGAN kurangi cs lagi
+            sliced = slice_srt(entries, cs, ce)
+            p.srt_text = to_srt(sliced) if sliced else p.srt_text
             p.srt_relative = True  # sudah relatif; jangan di-slice ulang di subtitle_engine
         p.clip_start = 0.0
         p.clip_end = max(0.5, ce - cs)
@@ -821,7 +834,15 @@ def execute_render(p: RenderParams, progress_cb=None) -> dict:
     prefix = "preview" if p.preview_seconds else "supaisu"
     ass_path = EXPORTS_DIR / f"sub_{out_id}.ass"
     out_video = EXPORTS_DIR / f"{prefix}_{out_id}.mp4"
-    ass_path.write_text(ass_from_params(p, meta), encoding="utf-8")
+    ass_text = ass_from_params(p, meta)
+    ass_path.write_text(ass_text, encoding="utf-8")
+
+    dialog_lines = [line for line in ass_text.splitlines() if line.startswith("Dialogue:")]
+    print(f"\n[SUBTITLE LOG] File .ass dibuat: {ass_path.name} ({len(dialog_lines)} dialog events)")
+    for d in dialog_lines[:5]:
+        print(f"  {d}")
+    if not dialog_lines:
+        print("  [PERINGATAN] Tidak ada baris dialog 'Dialogue:' di file .ass!")
     try:
         result = render_vertical_clip(
             video_path=video_path,
@@ -832,10 +853,12 @@ def execute_render(p: RenderParams, progress_cb=None) -> dict:
             main_x_offset=p.main_x_offset,
             main_y_offset=p.main_y_offset,
             main_zoom=p.main_zoom,
+            camera_keyframes=[k.model_dump() for k in p.camera_keyframes],
             webcam_enabled=p.webcam_enabled,
             webcam_src=p.webcam_src.model_dump() if p.webcam_src else None,
             webcam_dst=p.webcam_dst.model_dump() if p.webcam_dst else None,
             webcam_style=p.webcam_style.model_dump(),
+            subtitle_style=p.style_key,
             sfx_path=sfx_path,
             sfx_volume=p.sfx_volume,
             sfx_start_sec=p.sfx_start_sec,

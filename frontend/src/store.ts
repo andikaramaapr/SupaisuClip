@@ -72,6 +72,12 @@ interface SupaisuStore {
   setEdit: (patch: Partial<EditState>) => void;
   resetEdit: () => void;
 
+  // preview playhead synchronization
+  previewTime: number;
+  setPreviewTime: (t: number) => void;
+  seekRequestTime: number | null;
+  requestSeek: (t: number | null) => void;
+
   // render jobs
   renderJobId: string | null;
   setRenderJobId: (id: string | null) => void;
@@ -184,10 +190,11 @@ export const useStore = create<SupaisuStore>((set, get) => ({
     if (config) {
       set({
         activeClipId: id,
+        previewTime: 0,
         edit: { ...config, video_filename: edit.video_filename || config.video_filename },
       });
     } else {
-      set({ activeClipId: id });
+      set({ activeClipId: id, previewTime: 0 });
     }
   },
 
@@ -216,6 +223,11 @@ export const useStore = create<SupaisuStore>((set, get) => ({
     });
   },
   resetEdit: () => set({ edit: { ...DEFAULT_EDIT_STATE } }),
+
+  previewTime: 0,
+  setPreviewTime: (t) => set({ previewTime: t }),
+  seekRequestTime: null,
+  requestSeek: (t) => set({ seekRequestTime: t }),
 
   renderJobId: null,
   setRenderJobId: (id) => set({ renderJobId: id }),

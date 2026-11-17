@@ -491,25 +491,64 @@ def build_ass_text(
     shadow_val = 2 if st["border_style"] == 1 else 0
     spacing_val = 1
 
-    # --- cue: mutlak -> potong & geser ke 0; atau sudah relatif ---
+    # --- cue: normalisasi ke timestamp RELATIF [0 .. clip_dur] ---
+    # slice_srt() di srt_utils.py SUDAH menggeser timestamp ke relatif (mengurangi clip_start).
+    # JANGAN kurangi clip_start dua kali!
     entries = parse_srt(srt_text)
-    if not srt_relative and clip_start is not None and clip_end is not None:
-        entries = slice_srt(entries, clip_start, clip_end)
-        if clip_duration_sec is None:
-            clip_duration_sec = max(0.0, clip_end - clip_start)
-    if clip_duration_sec is None:
-        clip_duration_sec = max((e["end"] for e in entries), default=30.0)
+    cs = float(clip_start) if clip_start is not None else 0.0
+    ce = float(clip_end) if clip_end is not None else (cs + (clip_duration_sec or 30.0))
+    clip_dur = max(0.5, ce - cs)
 
-    # Terapkan subtitle_offset_sec: geser semua cue (clamp agar tidak negatif)
+    # Deteksi apakah cue sudah relatif: jika max(start) <= clip_dur + 2s, anggap sudah relatif.
+    # Ini mencegah pengurangan ganda saat backend sudah memanggil slice_srt sebelumnya.
+    if not srt_relative and entries:
+        max_cue_end = max((e["end"] for e in entries), default=0.0)
+        # Jika semua cue jauh di bawah clip_dur, kemungkinan sudah relatif
+        if max_cue_end <= clip_dur + 2.0 and cs > 0.5:
+            # Periksa apakah ada cue yang start-nya >= clip_start: jika tidak ada, sudah relatif
+            has_abs = any(e["start"] >= cs - 1.0 for e in entries)
+            if not has_abs:
+                srt_relative = True
+
+    processed_entries: list[dict] = []
+    if not srt_relative:
+        # Timestamp ABSOLUT video asli: filter [cs, ce] dan geser ke relatif [0, clip_dur]
+        # Tidak pakai slice_srt() karena itu sudah geser sendiri – lakukan manual agar eksplisit
+        for e in entries:
+            if e["end"] <= cs or e["start"] >= ce:
+                continue
+            r_start = max(0.0, e["start"] - cs)
+            r_end = min(clip_dur, e["end"] - cs)
+            if r_end > r_start + 0.01:
+                processed_entries.append({**e, "start": r_start, "end": r_end})
+    else:
+        # Sudah relatif: clamp ke [0, clip_dur] tanpa pengurangan cs lagi
+        for e in entries:
+            if e["end"] <= 0.0 or e["start"] >= clip_dur:
+                continue
+            r_start = max(0.0, min(clip_dur, e["start"]))
+            r_end = min(clip_dur, max(r_start + 0.1, e["end"]))
+            if r_end > r_start:
+                processed_entries.append({**e, "start": r_start, "end": r_end})
+
+    entries = processed_entries
+    clip_duration_sec = clip_dur
+
+    # Terapkan subtitle_offset_sec: geser semua cue (clamp agar tetap dalam 0..clip_dur)
     if subtitle_offset_sec != 0.0:
         entries = [
-            {**e, "start": max(0.0, e["start"] + subtitle_offset_sec), "end": max(0.1, e["end"] + subtitle_offset_sec)}
+            {
+                **e,
+                "start": max(0.0, min(clip_dur, e["start"] + subtitle_offset_sec)),
+                "end": max(0.1, min(clip_dur, e["end"] + subtitle_offset_sec)),
+            }
             for e in entries
+            if e["end"] + subtitle_offset_sec > 0.0 and e["start"] + subtitle_offset_sec < clip_dur
         ]
 
     # Normalize word_timings (adjust for clip_start offset if absolute)
     _wt = word_timings or []
-    _clip_base = clip_start if (clip_start is not None and not srt_relative) else 0.0
+    _clip_base = cs if not srt_relative else 0.0
 
     # --- gaya hook ---
     if hook_mode == "text":
