@@ -182,34 +182,111 @@ def _download(url: str, job_id: str, uploads_dir: Path, sub_lang: str, sub_sourc
 
 
 def download_youtube_clip(url: str, output_path: Path, start_sec: float, end_sec: float) -> Path:
-    """Unduh HANYA potongan video rentang start_sec - end_sec via yt-dlp --download-sections."""
+    """Unduh HANYA potongan video rentang start_sec - end_sec via yt-dlp --download-sections.
+    Fallback: jika hasil < 50 KB atau returncode != 0, unduh full lalu potong dengan FFmpeg.
+    """
     url = check_url(url)
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     section_str = f"*{max(0.0, start_sec):.2f}-{max(start_sec + 0.5, end_sec):.2f}"
-    cmd = YTDLP + _base() + [
-        "-S", "res:1080,vcodec:h264,acodec:aac",
-        "--download-sections", section_str,
-        "--force-keyframes-at-cuts",
+
+    # Format selector kompatibel H.264 + AAC agar tidak gagal decode
+    FMT = "bv*[ext=mp4][vcodec^=avc1]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b"
+
+    def _run_ytdlp(extra_args: list[str], out: Path) -> subprocess.CompletedProcess:
+        cmd = YTDLP + _base() + [
+            "-f", FMT,
+            "--download-sections", section_str,
+            "--force-keyframes-at-cuts",
+            "--merge-output-format", "mp4",
+            "-o", str(out),
+        ] + extra_args + [url]
+        return subprocess.run(
+            cmd, capture_output=True, text=True,
+            encoding="utf-8", errors="replace", env=_env(),
+        )
+
+    MIN_SIZE = 50 * 1024  # 50 KB
+
+    def _result_ok(p: Path) -> bool:
+        return p.exists() and p.stat().st_size >= MIN_SIZE
+
+    # --- Percobaan 1: default ---
+    p = _run_ytdlp([], output_path)
+    if p.returncode == 0 and _result_ok(output_path):
+        return output_path
+
+    # Cari candidate dengan extension berbeda (yt-dlp kadang ubah ext)
+    for c in sorted(output_path.parent.glob(f"{output_path.stem}.*")):
+        if c.suffix.lower() in VIDEO_EXTS and _result_ok(c):
+            return c
+
+    # --- Percobaan 2: android+web player client ---
+    p2_out = output_path.with_stem(output_path.stem + "_p2")
+    p2 = _run_ytdlp(
+        ["--extractor-args", "youtube:player_client=android,web"],
+        p2_out,
+    )
+    result_p2: Path | None = None
+    if p2.returncode == 0 and _result_ok(p2_out):
+        result_p2 = p2_out
+    else:
+        for c in sorted(output_path.parent.glob(f"{p2_out.stem}.*")):
+            if c.suffix.lower() in VIDEO_EXTS and _result_ok(c):
+                result_p2 = c
+                break
+
+    if result_p2:
+        # Rename ke output_path yang diinginkan
+        final = output_path.with_stem(output_path.stem)
+        result_p2.rename(final) if result_p2 != final else None
+        return result_p2 if not final.exists() else final
+
+    # --- Percobaan 3: Fallback — unduh video UTUH lalu potong dengan FFmpeg ---
+    raw_out = output_path.with_stem(output_path.stem + "_raw")
+    cmd_full = YTDLP + _base() + [
+        "-f", FMT,
         "--merge-output-format", "mp4",
-        "-o", str(output_path),
+        "--extractor-args", "youtube:player_client=android,web",
+        "-o", str(raw_out),
         url,
     ]
-    p = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        env=_env(),
+    pf = subprocess.run(
+        cmd_full, capture_output=True, text=True,
+        encoding="utf-8", errors="replace", env=_env(),
     )
-    if p.returncode != 0 or not output_path.exists():
-        candidates = list(output_path.parent.glob(f"{output_path.stem}.*"))
-        for c in candidates:
+    raw_file: Path | None = None
+    if pf.returncode == 0 and raw_out.exists():
+        raw_file = raw_out
+    else:
+        for c in sorted(output_path.parent.glob(f"{raw_out.stem}.*")):
             if c.suffix.lower() in VIDEO_EXTS and c.exists():
-                return c
-        raise RuntimeError(p.stderr.strip()[-600:] or f"Gagal mengunduh potongan YouTube {section_str}")
-    return output_path
+                raw_file = c
+                break
+
+    if raw_file:
+        ff_cmd = [
+            "ffmpeg", "-y",
+            "-ss", f"{max(0.0, start_sec):.3f}",
+            "-to", f"{max(start_sec + 0.5, end_sec):.3f}",
+            "-i", str(raw_file),
+            "-c:v", "libx264", "-preset", "fast", "-crf", "20",
+            "-c:a", "aac",
+            str(output_path),
+        ]
+        ff = subprocess.run(ff_cmd, capture_output=True, env=_env())
+        # Hapus file raw yang besar setelah selesai
+        try:
+            raw_file.unlink(missing_ok=True)
+        except Exception:
+            pass
+        if output_path.exists() and output_path.stat().st_size >= MIN_SIZE:
+            return output_path
+
+    raise RuntimeError(
+        (p.stderr or p2.stderr or pf.stderr or "").strip()[-600:]
+        or f"Gagal mengunduh potongan YouTube {section_str} setelah semua percobaan"
+    )
 
 
 def extract_youtube_frame(url: str, timestamp_sec: float, output_dir: Path) -> str:

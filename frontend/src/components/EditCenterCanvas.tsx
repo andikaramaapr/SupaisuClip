@@ -76,13 +76,26 @@ function extractYoutubeId(url: string): string | null {
 }
 
 export default function EditCenterCanvas() {
-  const { edit, setEdit, videoMeta, videoUrl, previewUrl, youtubeVideoId, youtubeUrl } = useStore();
+  const { edit, setEdit, videoMeta, videoUrl, previewUrl, youtubeVideoId, youtubeUrl, activeClipId } = useStore();
+  // effectiveYoutubeId: coba dari store, lalu dari edit.youtube_url, lalu dari youtubeUrl store
   const effectiveYoutubeId =
-    youtubeVideoId ||
-    extractYoutubeId(edit.youtube_url || youtubeUrl || '');
+    (youtubeVideoId && youtubeVideoId !== '' ? youtubeVideoId : null) ||
+    extractYoutubeId(edit.youtube_url || youtubeUrl || '') ||
+    '';
+  // videoSrc: hanya pakai jika video lokal benar-benar ada (video_filename tidak kosong)
   const videoSrc = previewUrl || videoUrl || (edit.video_filename ? `/files/uploads/${edit.video_filename}` : '');
-  // YouTube IFrame mode: used when no local video file but YouTube URL/ID is known
-  const isYoutubeMode = !videoSrc && Boolean(effectiveYoutubeId);
+  // hasLocalVideo: hanya true jika ada upload lokal yang sesungguhnya
+  const hasLocalVideo = Boolean(videoUrl || previewUrl || edit.video_filename);
+
+  const [videoLoadError, setVideoLoadError] = useState(false);
+
+  // Reset videoLoadError setiap kali sumber video atau klip aktif berubah
+  useEffect(() => {
+    setVideoLoadError(false);
+  }, [videoUrl, previewUrl, edit.video_filename, activeClipId, edit.clip_start]);
+
+  // YouTube IFrame mode: pakai jika tidak ada video lokal ATAU video lokal gagal dimuat
+  const isYoutubeMode = Boolean(effectiveYoutubeId) && (!hasLocalVideo || videoLoadError);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   // For YouTube mode: track currentTime via postMessage polling
   const ytTimeRef = useRef<number>(edit.clip_start || 0);
@@ -937,12 +950,16 @@ export default function EditCenterCanvas() {
                   title="YouTube Preview"
                 />
               </div>
-            ) : (
+            ) : videoSrc && !videoLoadError ? (
               <video
                 ref={videoRef}
                 src={videoSrc}
                 onLoadedMetadata={handleVideoLoaded}
                 onTimeUpdate={handleTimeUpdate}
+                onError={() => {
+                  console.warn('Video element onError triggered, falling back to YouTube IFrame if available');
+                  setVideoLoadError(true);
+                }}
                 playsInline
                 style={{
                   width: '100%',
@@ -954,6 +971,32 @@ export default function EditCenterCanvas() {
                       : 'none',
                 }}
               />
+            ) : (
+              <div
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 12,
+                  color: '#5A635F',
+                  background: '#07070A',
+                  padding: 20,
+                  textAlign: 'center',
+                }}
+              >
+                <Icon icon="solar:videocamera-record-bold-duotone" width={48} height={48} style={{ color: '#1D634E' }} />
+                <div style={{ fontSize: 16, color: '#F6F4F1', fontWeight: 700 }}>
+                  {videoLoadError ? 'Gagal Memuat File Video' : 'Belum Ada Sumber Video'}
+                </div>
+                <div style={{ fontSize: 12, maxWidth: 360, color: '#8A9490' }}>
+                  {videoLoadError
+                    ? 'Browser tidak dapat memutar file video lokal ini. Gunakan link YouTube atau upload ulang video dalam format MP4 (H.264).'
+                    : 'Silakan pilih klip dari Tahap 2 atau masukkan URL YouTube / file video di Tahap 1.'}
+                </div>
+              </div>
             )}
           </div>
 

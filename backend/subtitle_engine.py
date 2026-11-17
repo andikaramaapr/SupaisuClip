@@ -631,3 +631,36 @@ def build_ass_file(output_ass_path: Path, srt_text: str, **kwargs) -> Path:
     output_ass_path = Path(output_ass_path)
     output_ass_path.write_text(build_ass_text(srt_text, **kwargs), encoding="utf-8")
     return output_ass_path
+
+
+# ---------------------------------------------------------------- srt utils -----
+def slice_srt_to_zero(srt_text: str, start_sec: float, end_sec: float) -> str:
+    """
+    Ambil cue SRT yang beririsan dengan [start_sec, end_sec], clamp, geser ke 00:00:00,000, renumber.
+    """
+    from srt_utils import parse_srt
+
+    def _srt_ts(sec: float) -> str:
+        sec = max(0.0, sec)
+        h = int(sec // 3600)
+        m = int((sec % 3600) // 60)
+        s = int(sec % 60)
+        ms = int(round((sec % 1) * 1000))
+        if ms >= 1000:
+            ms = 999
+        return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+    entries = parse_srt(srt_text)
+    result: list[str] = []
+    idx = 1
+    for e in entries:
+        # beririsan jika cue mulai sebelum end_sec dan cue selesai sesudah start_sec
+        if e["end"] <= start_sec or e["start"] >= end_sec:
+            continue
+        clamped_start = max(e["start"], start_sec) - start_sec
+        clamped_end = min(e["end"], end_sec) - start_sec
+        result.append(
+            f"{idx}\n{_srt_ts(clamped_start)} --> {_srt_ts(clamped_end)}\n{e['text'].strip()}\n"
+        )
+        idx += 1
+    return "\n".join(result)

@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field, model_validator
 
 import youtube_engine
 from srt_utils import parse_srt, slice_srt, snap_to_cues, to_srt, transcript_for_ai, validate_srt
-from subtitle_engine import SUBTITLE_STYLES, build_ass_text, get_font_family_name
+from subtitle_engine import SUBTITLE_STYLES, build_ass_text, get_font_family_name, slice_srt_to_zero
 from video_engine import (
     DEFAULT_WEBCAM_STYLE,
     detect_encoders,
@@ -768,8 +768,21 @@ def execute_render(p: RenderParams, progress_cb=None) -> dict:
             progress_cb(5.0)
         cs = p.clip_start
         ce = p.clip_end if p.clip_end is not None else (cs + 60.0)
-        downloaded = youtube_engine.download_youtube_clip(p.youtube_url, out_clip, cs, ce)
-        p.video_filename = downloaded.name
+        try:
+            downloaded = youtube_engine.download_youtube_clip(p.youtube_url, out_clip, cs, ce)
+            if not downloaded.exists() or downloaded.stat().st_size < 50 * 1024:
+                raise HTTPException(
+                    status_code=502,
+                    detail="Gagal mengunduh video dari YouTube. Pastikan koneksi stabil atau coba lagi.",
+                )
+            p.video_filename = downloaded.name
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(
+                status_code=502,
+                detail="Gagal mengunduh video dari YouTube. Pastikan koneksi stabil atau coba lagi.",
+            )
         # Karena video sudah dipotong di rentang cs..ce, reset clip_start ke 0 dan clip_end ke durasi klip.
         # PENTING: SRT timestamp MUTLAK harus di-slice dan di-shift ke waktu relatif klip (mulai dari 0),
         # karena video yang diunduh sudah dimulai dari detik 0 (bukan dari cs).
@@ -788,6 +801,13 @@ def execute_render(p: RenderParams, progress_cb=None) -> dict:
         p.clip_end = max(0.5, ce - cs)
 
     video_path = safe_child(UPLOADS_DIR, p.video_filename, "video")
+    if not video_path.exists() or video_path.stat().st_size < 50 * 1024:
+        raise HTTPException(
+            status_code=502,
+            detail="Gagal mengunduh video dari YouTube. Pastikan koneksi stabil atau coba lagi."
+            if p.youtube_url
+            else "File video sumber tidak ditemukan atau rusak (< 50KB).",
+        )
     meta = probe_cached(video_path)
     cs, ce = resolve_clip(p, meta)
 
@@ -929,3 +949,92 @@ def render_status(job_id: str):
     if not job:
         raise HTTPException(404, "Job render tidak ditemukan")
     return {"job_id": job_id, **{k: v for k, v in job.items() if k != "started_at"}}
+
+
+# ---------------------------------------------------------------- raw clip download -----
+class DownloadRawPayload(BaseModel):
+    video_filename: str | None = None
+    youtube_url: str | None = None
+    srt_text: str = ""
+    clip_start: float = 0.0
+    clip_end: float = 60.0
+    title: str = "clip"
+
+
+@app.post("/api/clips/download-raw")
+async def download_raw_clip(payload: DownloadRawPayload):
+    """
+    Potong video mentah (tanpa subtitle burn-in/crop) + ekspor SRT yang sudah di-shift ke 00:00.
+    Return: { video_url, srt_url, filename }
+    """
+    import asyncio
+
+    start = max(0.0, payload.clip_start)
+    end = max(start + 0.5, payload.clip_end)
+    safe_title = re.sub(r"[^a-zA-Z0-9_\-]", "_", (payload.title or "clip"))[:40]
+    uid = uuid.uuid4().hex[:8]
+    out_name = f"raw_{safe_title}_{uid}"
+
+    # --- SRT slice ---
+    srt_url: str | None = None
+    if payload.srt_text.strip():
+        sliced_srt = slice_srt_to_zero(payload.srt_text, start, end)
+        if sliced_srt.strip():
+            srt_path = EXPORTS_DIR / f"{out_name}.srt"
+            srt_path.write_text(sliced_srt, encoding="utf-8")
+            srt_url = f"/files/exports/{srt_path.name}"
+
+    # --- Video slice ---
+    video_url: str | None = None
+    mp4_name = f"{out_name}.mp4"
+    mp4_path = EXPORTS_DIR / mp4_name
+
+    if payload.video_filename:
+        # Video lokal — FFmpeg slice
+        src = safe_child(UPLOADS_DIR, payload.video_filename, "video")
+        if not src.exists() or src.stat().st_size < 50 * 1024:
+            raise HTTPException(404, f"Video '{payload.video_filename}' tidak ditemukan atau rusak (< 50KB)")
+        cmd = [
+            "ffmpeg", "-y",
+            "-ss", f"{start:.3f}",
+            "-to", f"{end:.3f}",
+            "-i", str(src),
+            "-c:v", "libx264", "-preset", "fast", "-crf", "18",
+            "-c:a", "aac",
+            str(mp4_path),
+        ]
+        loop = asyncio.get_event_loop()
+        proc = await loop.run_in_executor(
+            None,
+            lambda: __import__("subprocess").run(cmd, capture_output=True),
+        )
+        if proc.returncode != 0 or not mp4_path.exists() or mp4_path.stat().st_size < 50 * 1024:
+            stderr = proc.stderr.decode("utf-8", errors="replace")[-500:]
+            raise HTTPException(500, f"FFmpeg gagal memotong video: {stderr}")
+        video_url = f"/files/exports/{mp4_name}"
+
+    elif payload.youtube_url:
+        # YouTube — yt-dlp sections download
+        try:
+            loop = asyncio.get_event_loop()
+            result_path = await loop.run_in_executor(
+                None,
+                lambda: youtube_engine.download_youtube_clip(
+                    payload.youtube_url, mp4_path, start, end
+                ),
+            )
+            if not result_path or not result_path.exists() or result_path.stat().st_size < 50 * 1024:
+                raise HTTPException(
+                    status_code=502,
+                    detail="Gagal mengunduh video dari YouTube. Pastikan koneksi stabil atau coba lagi.",
+                )
+            video_url = f"/files/exports/{result_path.name}"
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(
+                status_code=502,
+                detail="Gagal mengunduh video dari YouTube. Pastikan koneksi stabil atau coba lagi.",
+            )
+
+    return {"video_url": video_url, "srt_url": srt_url, "filename": out_name}

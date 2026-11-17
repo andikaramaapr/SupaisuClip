@@ -2,6 +2,19 @@ import { create } from 'zustand';
 import { DEFAULT_EDIT_STATE } from './types';
 import type { EditState, Step, ClipSegment, VideoMeta, YouTubeInfo, FontAsset, SfxAsset } from './types';
 
+// Ekstrak 11-karakter YouTube video ID dari berbagai format URL
+function extractYouTubeId(url: string): string | null {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/|youtube\.com\/live\/)([A-Za-z0-9_-]{11})/,
+    /youtube\.com\/v\/([A-Za-z0-9_-]{11})/,
+  ];
+  for (const p of patterns) {
+    const m = (url || '').match(p);
+    if (m) return m[1];
+  }
+  return null;
+}
+
 interface SupaisuStore {
   // wizard step
   step: Step;
@@ -9,9 +22,11 @@ interface SupaisuStore {
 
   // source state
   youtubeUrl: string;
+  youtubeVideoId: string;    // extracted 11-char ID, never null
   setYoutubeUrl: (u: string) => void;
-  youtubeVideoId: string | null;    // NEW: extracted from URL for IFrame embed
   setYoutubeVideoId: (id: string | null) => void;
+  /** Simpan URL + ekstrak ID secara atomik — pakai ini dari SourceStep */
+  setYoutubeSource: (url: string) => void;
   youtubeInfo: YouTubeInfo | null;
   setYoutubeInfo: (info: YouTubeInfo | null) => void;
   ytJobId: string | null;
@@ -67,9 +82,13 @@ export const useStore = create<SupaisuStore>((set, get) => ({
   setStep: (s) => set({ step: s }),
 
   youtubeUrl: '',
+  youtubeVideoId: '',
   setYoutubeUrl: (u) => set({ youtubeUrl: u }),
-  youtubeVideoId: null,
-  setYoutubeVideoId: (id) => set({ youtubeVideoId: id }),
+  setYoutubeVideoId: (id) => set({ youtubeVideoId: id ?? '' }),
+  setYoutubeSource: (url) => {
+    const id = extractYouTubeId(url) ?? '';
+    set({ youtubeUrl: url, youtubeVideoId: id });
+  },
   youtubeInfo: null,
   setYoutubeInfo: (info) => set({ youtubeInfo: info }),
   ytJobId: null,

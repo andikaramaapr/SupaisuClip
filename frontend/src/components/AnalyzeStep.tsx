@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Icon } from '@iconify/react';
 import { useStore } from '../store';
-import { analyzeClips } from '../api';
+import { analyzeClips, downloadRawClip } from '../api';
 import type { ClipSegment } from '../types';
 
 // Helper extract YouTube ID from diverse formats
@@ -37,9 +37,11 @@ export default function AnalyzeStep() {
     setStep,
   } = useStore();
 
-  const effectiveYoutubeId = youtubeVideoId || extractYoutubeId(youtubeUrl || edit.youtube_url || '');
+  const effectiveYoutubeId = youtubeVideoId || extractYoutubeId(youtubeUrl || edit.youtube_url || '') || '';
+  // videoSrc: hanya pakai file lokal jika video_filename benar-benar ada (bukan string kosong)
   const videoSrc = previewUrl || videoUrl || (edit.video_filename ? `/files/uploads/${edit.video_filename}` : '');
-  const isYoutube = !videoSrc && Boolean(effectiveYoutubeId);
+  // isYoutube = true jika ada YouTube ID dan tidak ada file video lokal yang valid
+  const isYoutube = Boolean(effectiveYoutubeId) && !videoUrl && !previewUrl && !edit.video_filename;
 
   const selectedClip = clips.find((c) => (c.id || `clip_${c.start}_${c.end}`) === activeClipId) || clips[0] || null;
   const clipStart = selectedClip ? selectedClip.start : edit.clip_start;
@@ -48,6 +50,7 @@ export default function AnalyzeStep() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [analyzedSrtSnapshot, setAnalyzedSrtSnapshot] = useState('');
+  const [downloadingClipId, setDownloadingClipId] = useState<string | null>(null);
 
   // Video preview player state
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -191,6 +194,99 @@ export default function AnalyzeStep() {
       videoRef.current.currentTime = c.start;
     } else if (isYoutube) {
       ytSendCmd('seekTo', [c.start, true]);
+    }
+  };
+
+  // Handler: Download Raw MP4 (via backend FFmpeg / yt-dlp)
+  const handleDownloadRawMp4 = async (clip: ClipSegment, clipId: string) => {
+    setDownloadingClipId(clipId + '_mp4');
+    try {
+      const payload = {
+        video_filename: edit.video_filename || undefined,
+        youtube_url: (youtubeUrl || edit.youtube_url) || undefined,
+        srt_text: edit.srt_text || '',
+        clip_start: clip.start,
+        clip_end: clip.end,
+        title: clip.title || 'clip',
+      };
+      const res = await downloadRawClip(payload);
+      if (res.video_url) {
+        const a = document.createElement('a');
+        a.href = res.video_url;
+        a.download = `${res.filename}.mp4`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+    } catch (e) {
+      alert(`Gagal mengunduh klip: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setDownloadingClipId(null);
+    }
+  };
+
+  // Handler: Download SRT (client-side slice — tidak perlu backend)
+  const handleDownloadSrt = (clip: ClipSegment, clipId: string) => {
+    if (!edit.srt_text?.trim()) {
+      alert('Belum ada subtitle SRT untuk klip ini.');
+      return;
+    }
+    setDownloadingClipId(clipId + '_srt');
+    try {
+      // Slice SRT di browser
+      const lines = edit.srt_text.split(/\r?\n/);
+      const blocks: string[] = [];
+      let cur: string[] = [];
+      for (const line of lines) {
+        if (line.trim() === '' && cur.length > 0) {
+          blocks.push(cur.join('\n'));
+          cur = [];
+        } else {
+          cur.push(line);
+        }
+      }
+      if (cur.length > 0) blocks.push(cur.join('\n'));
+
+      const parseSrtTs = (ts: string): number => {
+        const [h, m, rest] = ts.split(':');
+        const [s, ms] = rest.replace(',', '.').split('.');
+        return parseInt(h) * 3600 + parseInt(m) * 60 + parseInt(s) + parseInt(ms || '0') / 1000;
+      };
+      const fmtTs = (sec: number): string => {
+        const h = Math.floor(sec / 3600);
+        const m = Math.floor((sec % 3600) / 60);
+        const s = Math.floor(sec % 60);
+        const ms = Math.round((sec % 1) * 1000);
+        return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')},${String(ms).padStart(3,'0')}`;
+      };
+
+      const result: string[] = [];
+      let idx = 1;
+      for (const block of blocks) {
+        const bLines = block.split('\n');
+        const tsLine = bLines.find(l => l.includes('-->'));
+        if (!tsLine) continue;
+        const [tsStart, tsEnd] = tsLine.split('-->').map(t => parseSrtTs(t.trim()));
+        if (tsEnd <= clip.start || tsStart >= clip.end) continue;
+        const cs = Math.max(tsStart, clip.start) - clip.start;
+        const ce = Math.min(tsEnd, clip.end) - clip.start;
+        const textLines = bLines.filter(l => !l.match(/^\d+$/) && !l.includes('-->'));
+        result.push(`${idx}\n${fmtTs(cs)} --> ${fmtTs(ce)}\n${textLines.join('\n').trim()}`);
+        idx++;
+      }
+      const srtContent = result.join('\n\n');
+      const blob = new Blob([srtContent], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const safeName = (clip.title || 'clip').replace(/[^a-zA-Z0-9_\-]/g, '_').slice(0, 40);
+      a.href = url;
+      a.download = `${safeName}_${Math.round(clip.start)}-${Math.round(clip.end)}.srt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } finally {
+      setDownloadingClipId(null);
     }
   };
 
@@ -851,7 +947,50 @@ export default function AnalyzeStep() {
                 )}
 
                 {/* Action Buttons Bar */}
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                  {/* Download Raw MP4 */}
+                  {(videoSrc || isYoutube) && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDownloadRawMp4(clip, clipId); }}
+                      disabled={downloadingClipId === clipId + '_mp4'}
+                      title="Unduh klip mentah tanpa subtitle burn-in"
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 4,
+                        padding: '6px 11px', borderRadius: 6,
+                        border: '1px solid #D3D9D6',
+                        background: '#EFF2F0', color: '#111916',
+                        fontSize: 11, cursor: downloadingClipId === clipId + '_mp4' ? 'not-allowed' : 'pointer',
+                        fontFamily: "'Montserrat', sans-serif", fontWeight: 600,
+                        opacity: downloadingClipId === clipId + '_mp4' ? 0.6 : 1,
+                      }}
+                    >
+                      {downloadingClipId === clipId + '_mp4'
+                        ? <Icon icon="solar:refresh-circle-bold-duotone" width={13} height={13} className="animate-spin" />
+                        : <Icon icon="solar:videocamera-record-bold-duotone" width={13} height={13} />}
+                      {downloadingClipId === clipId + '_mp4' ? 'Memotong...' : 'Raw MP4'}
+                    </button>
+                  )}
+
+                  {/* Download SRT */}
+                  {edit.srt_text?.trim() && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDownloadSrt(clip, clipId); }}
+                      disabled={downloadingClipId === clipId + '_srt'}
+                      title="Unduh SRT yang sudah dipotong dan digeser ke 00:00"
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 4,
+                        padding: '6px 11px', borderRadius: 6,
+                        border: '1px solid #D3D9D6',
+                        background: '#EFF2F0', color: '#111916',
+                        fontSize: 11, cursor: 'pointer',
+                        fontFamily: "'Montserrat', sans-serif", fontWeight: 600,
+                      }}
+                    >
+                      <Icon icon="solar:file-text-bold-duotone" width={13} height={13} />
+                      SRT
+                    </button>
+                  )}
+
                   {(videoSrc || isYoutube) ? (
                     <button
                       onClick={(e) => {

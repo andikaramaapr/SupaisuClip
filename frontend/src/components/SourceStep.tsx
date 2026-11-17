@@ -27,10 +27,9 @@ function extractYoutubeId(url: string): string | null {
 export default function SourceStep() {
   const {
     youtubeUrl,
-    setYoutubeUrl,
     youtubeInfo,
     setYoutubeInfo,
-    setYoutubeVideoId,
+    setYoutubeSource,
     ytJobId,
     setVideoMeta,
     setVideoUrl,
@@ -105,12 +104,9 @@ export default function SourceStep() {
 
     try {
       const info = await fetchYoutubeInfo(targetUrl);
-      setYoutubeUrl(targetUrl);
+      // Simpan URL + ekstrak ID secara atomik ke store global (satu panggilan atomik)
+      setYoutubeSource(targetUrl);
       setYoutubeInfo(info);
-
-      // Extract and store YouTube video ID for IFrame preview
-      const vid = extractYoutubeId(targetUrl);
-      setYoutubeVideoId(vid);
 
       // Also store youtube_url in edit state for slice-on-export
       setEdit({ youtube_url: targetUrl });

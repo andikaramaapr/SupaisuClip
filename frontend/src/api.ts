@@ -302,3 +302,22 @@ export function getVideoProxy(
     body: JSON.stringify({ video_filename }),
   });
 }
+
+// -------------------------------------------------------------
+// Raw Clip Download
+// -------------------------------------------------------------
+
+export async function downloadRawClip(payload: {
+  video_filename?: string;
+  youtube_url?: string;
+  srt_text: string;
+  clip_start: number;
+  clip_end: number;
+  title: string;
+}): Promise<{ video_url: string | null; srt_url: string | null; filename: string }> {
+  return apiFetch('/api/clips/download-raw', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
